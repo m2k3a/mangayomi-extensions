@@ -186,15 +186,14 @@ class MangaPark extends MProvider {
   });
   final doc = parseHtml(res.body);
 
-  final statusElement = doc.selectFirst("div:nth-child(2) > div:nth-child(4) > span.font-bold.uppercase");
+  final statusElement = doc.select("div span.font-bold.uppercase");
   final authorElements = doc.select("div.flex.flex-col > div.flex > div.grow.pl-3.space-y-2 > div.mt-2.text-sm > a");
   final genreList = doc.select("div.flex.items-center.flex-wrap > span > span:nth-child(1)");
   final descriptionElement = doc.selectFirst("div.limit-html-p");
 
   final author = authorElements.isNotEmpty ? authorElements.map((e) => e.text).join(" | ") : "Anonymous";
   final genres = genreList.map((e) => (e.text as String).replaceAll(",", "").trim()).toList() ?? [];
-
-  final status = statusElement?.text ?? "Unknown";
+  final status = statusElement.length == 2 ? statusElement[1]?.text : statusElement[0]?.text ?? "Unknown";
   final description = descriptionElement.text ?? "no Description...";
   final chapters = getChapters(doc);
 

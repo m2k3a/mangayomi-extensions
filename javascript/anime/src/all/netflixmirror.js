@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/all.netflixmirror.png",
     "typeSource": "single",
     "itemType": 1,
-    "version": "0.3.4",
+    "version": "1.0.0",
     "pkgPath": "anime/src/all/netflixmirror.js"
 }];
 
@@ -19,94 +19,74 @@ class DefaultExtension extends MProvider {
     }
 
     getPreference(key) {
-        const preferences = new SharedPreferences();
-        return preferences.get(key);
+        return new SharedPreferences().get(key);
     }
 
-    getTVBaseUrl() {
-        return this.getPreference("netmirror_override_tv_base_url");
+    getBaseUrl() {
+        return this.getPreference("net_override_base_url");
     }
 
     getServiceDetails() {
-        return this.getPreference("netmirror_pref_service");
+        return this.getPreference("net_pref_ott");
     }
 
-    getPoster(id, service) {
-        if (service === "nf")
-            return `https://imgcdn.media/poster/v/${id}.jpg`
-        if (service === "pv")
-            return `https://imgcdn.media/pv/480/${id}.jpg`
+    getPoster(imgcdn,id) {
+        return imgcdn.replace("------------------",id)
     }
 
-    async getCookie(service) {
+    getHeaders(){
+        return {
+            "referrer":this.getBaseUrl(),
+            "ott":this.getServiceDetails(),
+            "x-requested-with":"NetmirrorNewTV v1.0",
+            "user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0 /OS.GatuNewTV v1.0"
+        }
+    }
+
+    async request(slug,hdr) {
+        var url = this.getBaseUrl();
+        var api = url +"/newtv"+  slug
+        var res = await this.client.get(api,hdr);
+        return JSON.parse(res.body);
+    }
+
+      async getTokenHeader() {        
+        var hdr = this.getHeaders()
+        hdr['otp'] = "111111"
+
         const preferences = new SharedPreferences();
-        let cookie = preferences.getString("cookie", "");
-        var cookie_ts = parseInt(preferences.getString("cookie_ts", "0"));
+        let usertoken = preferences.getString("net_usertoken", "");
+        var usertoken_ts = parseInt(preferences.getString("net_usertoken_ts", "0"));
         var now_ts = parseInt(new Date().getTime() / 1000);
 
-        // Cookie lasts for 24hrs but still checking for 12hrs
-        if (now_ts - cookie_ts > 60 * 60 * 12) {
-            var baseUrl = this.getTVBaseUrl()
-            const check = await this.client.get(baseUrl + `/mobile/home`, { "cookie": cookie });
-            const hDocBody = new Document(check.body).selectFirst("body")
-
-            const addhash = hDocBody.attr("data-addhash");
-            const data_time = hDocBody.attr("data-time");
-
-            var res = await this.client.post(`${baseUrl}/tv/p.php`, { "cookie": "" }, { "hash": addhash });
-            cookie = res.headers["set-cookie"];
-            preferences.setString("cookie", cookie);
-            preferences.setString("cookie_ts", data_time);
-        }
-
-        service = service ?? this.getServiceDetails();
-
-        return `ott=${service}; ${cookie}`;
-    }
-
-    async request(slug, service = null, cookie = null) {
-        var service = service ?? this.getServiceDetails();
-        var cookie = cookie ?? await this.getCookie();
-
-        var srv = ""
-        if (service === "pv") srv = "/" + service
-        var url = this.getTVBaseUrl() + "/tv" + srv + slug
-        return (await this.client.get(url, { "cookie": cookie })).body;
+        // Cookie lasts for 24hrs but still checking for 1 hr
+        if (now_ts - usertoken_ts > 60 * 60) {
+            var body = await this.request("/otp.php", hdr)
+            usertoken = body.usertoken
+            
+            preferences.setString("net_usertoken", usertoken);
+            preferences.setString("net_usertoken_ts", ""+now_ts);
+        }      
+        hdr['usertoken'] = usertoken
+        return hdr
     }
 
 
-    async getHome(body) {
-        var service = this.getServiceDetails();
+    async getHome() {
+        var hdr = await this.getTokenHeader()
+        hdr["page"] = "all"
+
         var list = []
-        if (service === "nf") {
-            var body = await this.request("/home", service)
-            var elements = new Document(body).select("a.slider-item.boxart-container.open-modal.focusme");
+        var body = await this.request("/main.php", hdr)
 
-            elements.forEach(item => {
-                var id = item.attr("data-post")
-                if (id.length > 0) {
-                    var imageUrl = this.getPoster(id, service)
-                    // Having no name breaks the script so having "id" as name 
-                    var name = `\n${id}`
-                    list.push({ name, imageUrl, link: id })
-                }
+        var imgcdn = body.imgcdn_v
+        body.post.forEach(p=>{
+            p.ids.split(",").forEach(id=>{
+                list.push({ name: `\n${id}`, imageUrl: this.getPoster(imgcdn,id), link: id })
             })
-        } else {
-            var body = await this.request("/homepage.php", service)
-            var elements = JSON.parse(body).post
-
-            elements.forEach(item => {
-                var ids = item.ids
-                ids.split(",").forEach(id => {
-                    var imageUrl = this.getPoster(id, service)
-                    // Having no name breaks the script so having "id" as name 
-                    var name = `\n${id}`
-                    list.push({ name, imageUrl, link: id })
-                })
-            })
-        }
+        })
         return {
-            list: list,
+            list,
             hasNextPage: false
         }
     }
@@ -119,16 +99,17 @@ class DefaultExtension extends MProvider {
     }
 
     async search(query, page, filters) {
-        var service = this.getServiceDetails();
-        const data = JSON.parse(await this.request(`/search.php?s=${query}`, service));
+        var hdr = await this.getTokenHeader()
+        const body = await this.request(`/search.php?s=${query}`, hdr);
         const list = [];
-        data.searchResult.map(async (res) => {
+        var imgcdn = body.imgcdn
+        body.searchResult.map(async (res) => {
             const id = res.id;
-            list.push({ name: res.t, imageUrl: this.getPoster(id, service), link: id });
+            list.push({ name: res.t, imageUrl:this.getPoster(imgcdn,id), link: id });
         })
 
         return {
-            list: list,
+            list,
             hasNextPage: false
         }
     }
@@ -300,22 +281,22 @@ class DefaultExtension extends MProvider {
 
     getSourcePreferences() {
         return [{
-            key: "netmirror_override_tv_base_url",
+            key: "net_override_base_url",
             editTextPreference: {
                 title: "Override tv base url",
                 summary: "",
-                value: "https://netfree2.cc",
+                value: "https://net2025.cc",
                 dialogTitle: "Override base url",
                 dialogMessage: "",
             }
         }, {
-            key: 'netmirror_pref_service',
+            key: 'net_pref_ott',
             listPreference: {
                 title: 'Preferred OTT service',
                 summary: '',
                 valueIndex: 0,
-                entries: ["Net mirror", "Prime mirror"],
-                entryValues: ["nf", "pv",]
+                entries: ["Net mirror", "Prime mirror","Disknee mirror"],
+                entryValues: ["nf", "pv","hs"]
             }
         }, {
             key: 'netmirror_pref_video_resolution',

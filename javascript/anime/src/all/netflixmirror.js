@@ -9,7 +9,7 @@ const mangayomiSources = [
       "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/all.netflixmirror.png",
     "typeSource": "single",
     "itemType": 1,
-    "version": "1.0.3",
+    "version": "1.0.5",
     "pkgPath": "anime/src/all/netflixmirror.js",
   },
 ];
@@ -262,31 +262,25 @@ class DefaultExtension extends MProvider {
   }
 
   async getVideoList(url) {
-    var baseUrl = this.getTVBaseUrl();
-    var url = `/playlist.php?id=${url}`;
-    const data = JSON.parse(await this.request(url));
+    var headers = await this.getTokenHeader();
+
+    var baseUrl = headers['referrer']
+    var ott = headers['ott']
+
+    var streamUrl = `${baseUrl}/newtv/hls/${ott}/${url}.m3u8`
 
     let videoList = [];
-    let subtitles = [];
-    let audios = [];
-    var playlist = data[0];
-    var source = playlist.sources[0];
-
-    var link = baseUrl + source.file;
-    var headers = {
-      "Origin": baseUrl,
-      "Referer": `${baseUrl}/`,
-    };
+    let audios = [];    
 
     // Auto
     videoList.push({
-      url: link,
+      url: streamUrl,
       quality: "Auto",
-      "originalUrl": link,
+      originalUrl: streamUrl,
       headers,
     });
 
-    var resp = await this.client.get(link, headers);
+    var resp = await this.client.get(streamUrl, headers);
 
     if (resp.statusCode === 200) {
       const masterPlaylist = resp.body;
@@ -314,19 +308,11 @@ class DefaultExtension extends MProvider {
           .substringAfter("#EXT-X-STREAM-INF:")
           .split("#EXT-X-STREAM-INF:")
           .forEach((it) => {
-            var quality = `${it
+           var quality = `${it
               .substringAfter("RESOLUTION=")
-              .substringAfter("x")
-              .substringBefore(",")}p`;
+              .substringBefore(",")}`;
             let videoUrl = it.substringAfter("\n").substringBefore("\n");
 
-            if (!videoUrl.startsWith("http")) {
-              videoUrl =
-                resp.request.url.substringBeforeLast("/") + `/${videoUrl}`;
-            }
-            headers["Host"] = videoUrl.match(
-              /^(?:https?:\/\/)?(?:www\.)?([^\/]+)/
-            )[1];
             videoList.push({
               url: videoUrl,
               quality,
@@ -335,26 +321,9 @@ class DefaultExtension extends MProvider {
             });
           });
       }
-
-      if ("tracks" in playlist) {
-        await Promise.all(
-          playlist.tracks.map(async (track) => {
-            if (track.kind == "captions") {
-              var subUrl = track.file;
-              subUrl = subUrl.startsWith("//") ? `https:${subUrl}` : subUrl;
-              var subText = await this.client.get(subUrl);
-              subtitles.push({
-                label: track.label,
-                file: subText.body,
-              });
-            }
-          })
-        );
-      }
     }
 
     videoList[0].audios = audios;
-    videoList[0].subtitles = subtitles;
     return this.sortStreams(videoList);
   }
 
@@ -363,7 +332,7 @@ class DefaultExtension extends MProvider {
       {
         key: "net_override_base_url",
         editTextPreference: {
-          title: "Override tv base url",
+          title: "Override base url",
           summary: "",
           value: "https://net2025.cc",
           dialogTitle: "Override base url",
@@ -383,7 +352,7 @@ class DefaultExtension extends MProvider {
       {
         key: "net_ep_thumbnail",
         switchPreferenceCompat: {
-          title: "Show episode thumnail",
+          title: "Show episode thumbnail",
           summary: "",
           value: true,
         },

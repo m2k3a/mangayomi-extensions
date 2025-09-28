@@ -1,7 +1,7 @@
 import '../../../../../model/source.dart';
 
 Source get mangaparkSource => _mangaparkSource;
-const _mangaparkVersion = "1.0.2";
+const _mangaparkVersion = "1.0.3";
 const _mangaparkSourceCodeUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/manga/src/en/mangapark/mangapark.dart";
 const _mangaparkIconUrl =

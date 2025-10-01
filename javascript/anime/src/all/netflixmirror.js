@@ -10,8 +10,8 @@ const mangayomiSources = [
     "typeSource": "single",
     "itemType": 1,
     "version": "1.0.5",
-    "pkgPath": "anime/src/all/netflixmirror.js",
-  },
+    "pkgPath": "anime/src/all/netflixmirror.js"
+  }
 ];
 
 class DefaultExtension extends MProvider {
@@ -134,10 +134,10 @@ class DefaultExtension extends MProvider {
     const data = await this.request(`/post.php?id=${vidId}`, hdr);
     var ep_poster = data.ep_poster;
     const name = data.title;
-    var genre=[]
+    var genre = []
     data.moredetails.forEach((item) => {
-        var key = item.k;
-       if (key.includes("Genre")){
+      var key = item.k;
+      if (key.includes("Genre")) {
         genre = item.v.split(",").map((g) => g.trim());
       }
     });
@@ -169,7 +169,7 @@ class DefaultExtension extends MProvider {
       episodes.push({
         name: `Movie`,
         url: vidId,
-        duration:data.runtime
+        duration: data.runtime
       });
     }
 
@@ -270,7 +270,7 @@ class DefaultExtension extends MProvider {
     var streamUrl = `${baseUrl}/newtv/hls/${ott}/${url}.m3u8`
 
     let videoList = [];
-    let audios = [];    
+    let audios = [];
 
     // Auto
     videoList.push({
@@ -308,7 +308,7 @@ class DefaultExtension extends MProvider {
           .substringAfter("#EXT-X-STREAM-INF:")
           .split("#EXT-X-STREAM-INF:")
           .forEach((it) => {
-           var quality = `${it
+            var quality = `${it
               .substringAfter("RESOLUTION=")
               .substringBefore(",")}`;
             let videoUrl = it.substringAfter("\n").substringBefore("\n");

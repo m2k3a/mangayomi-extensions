@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://bato.to/amsta/img/btoto/logo-batoto.png?v0",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.0.0",
+    "version": "1.0.1",
     "pkgPath": "manga/src/all/batoto.js",
     "notes": ""
 }];
@@ -110,14 +110,14 @@ class DefaultExtension extends MProvider {
             if (filter.type === "genres") {
                 const included = filter.state.filter(e => e.state === 1);
                 const excluded = filter.state.filter(e => e.state === 2);
-                if (included.length > 0) {
+                if (included.length > 0 || excluded.length > 0) {
                     url += "&genres=";
-                    included.forEach(val => {
-                        url += `${val.value}`;
-                    });
                 }
+                included.forEach(val => {
+                    url += `${val.value}`;
+                });
                 if (excluded.length > 0) {
-                    url += "%7"
+                    url += "%7C"
                     excluded.forEach(val => {
                         url += `${val.value}`;
                     });
@@ -147,7 +147,7 @@ class DefaultExtension extends MProvider {
                     url += `&chapters=${filter.values[filter.state].value}`;
                 }
             } else if (filter.type === "sort") {
-                if (filter.state.index != 5 && !filter.state.ascending) {
+                if (filter.state.index != 5 || filter.state.ascending) {
                     const get_direction = (ascending) => {
                         if (ascending == true) {
                             return "az";

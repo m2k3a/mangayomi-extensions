@@ -68,7 +68,7 @@ class DefaultExtension extends MProvider {
         const doc = new Document(res.body);
         const main = doc.selectFirst('.site-content');
         
-        const name = doc.selectFirst("div.post-title > h1").text.trim();;
+        const name = doc.selectFirst("div.post-title > h1").text.trim();
         
         const link = url;
         

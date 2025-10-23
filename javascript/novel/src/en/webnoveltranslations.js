@@ -3,7 +3,7 @@ const mangayomiSources = [{
     "lang": "en",
     "baseUrl": "https://webnoveltranslations.com",
     "apiUrl": "",
-    "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.webnoveltranslations.png",
+    "iconUrl": "https://raw.githubusercontent.com/entityJY/mangayomi-extensions-eJ/main/javascript/icon/en.webnoveltranslations.png",
     "typeSource": "single",
     "itemType": 2,
     "version": "1.0.0",
@@ -68,7 +68,7 @@ class DefaultExtension extends MProvider {
         const doc = new Document(res.body);
         const main = doc.selectFirst('.site-content');
         
-        const name = doc.selectFirst("div.post-title > h1").text.trim();;
+        const name = doc.selectFirst("div.post-title > h1").text.trim();
         
         const link = url;
         

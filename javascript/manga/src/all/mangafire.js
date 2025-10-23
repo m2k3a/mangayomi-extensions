@@ -10,8 +10,8 @@ const mangayomiSources = [
     "version": "0.2.0",
     "dateFormat": "",
     "dateFormatLocale": "",
-    "pkgPath": "manga/src/all/mangafire.js",
-  },
+    "pkgPath": "manga/src/all/mangafire.js"
+  }
 ];
 
 class DefaultExtension extends MProvider {
@@ -173,7 +173,7 @@ class DefaultExtension extends MProvider {
       // /manga/ is needed to get chapter upload date
       const chapRes = await new Client().get(
         this.source.baseUrl +
-          `/ajax/manga/${id}/${viewType}/${this.source.lang}?vrf=${vrf}`
+        `/ajax/manga/${id}/${viewType}/${this.source.lang}?vrf=${vrf}`
       );
       const chapDoc = new Document(JSON.parse(chapRes.body).result);
       chapElements = chapDoc.selectFirst(".scroll-sm").children;

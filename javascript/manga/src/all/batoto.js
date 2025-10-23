@@ -165,9 +165,24 @@ class DefaultExtension extends MProvider {
 
     getDate(days_ago) {
         const date = new Date();
-        const days = parseInt(days_ago.replace(/\D/g, ""));
-        date.setDate(date.getDate() - days);
-        return date.valueOf().toString();
+        const time = parseInt(days_ago.replace(/\D/g, ""));
+        if (days_ago.search("sec") >= 0) {
+            date.setSeconds(date.getSeconds() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else if (days_ago.search("min") >= 0) {
+            date.setMinutes(date.getMinutes() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else if (days_ago.search("hour") >= 0) {
+            date.setHours(date.getHours() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else {
+            date.setDate(date.getDate() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        }
     }
 
     async getDetail(url) {

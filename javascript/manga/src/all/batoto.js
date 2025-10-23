@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://bato.to/amsta/img/btoto/logo-batoto.png?v0",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.0.3",
+    "version": "1.0.4",
     "pkgPath": "manga/src/all/batoto.js",
     "notes": "Uses web-scraping to pull details and chapters"
 }];

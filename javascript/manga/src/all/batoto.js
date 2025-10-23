@@ -106,22 +106,18 @@ class DefaultExtension extends MProvider {
         } else {
             url += `page=${page}`
         }
+        let genres_include_url = "&genres=";
+        let genres_exclude_url = "%7C";
         filters.forEach(filter => {
-            if (filter.type === "genres") {
+            if (filter.type === "format" || filter.type ==="demographic" || filter.type ==="content" || filter.type ==="genres") {
                 const included = filter.state.filter(e => e.state === 1);
                 const excluded = filter.state.filter(e => e.state === 2);
-                if (included.length > 0 || excluded.length > 0) {
-                    url += "&genres=";
-                }
                 included.forEach(val => {
-                    url += `${val.value}`;
+                    genres_include_url += `${val.value}`;
                 });
-                if (excluded.length > 0) {
-                    url += "%7C"
-                    excluded.forEach(val => {
-                        url += `${val.value}`;
-                    });
-                }
+                excluded.forEach(val => {
+                    genres_exclude_url += `${val.value}`;
+                });
             } else if (filter.type === "translated") {
                 const langs = filter.state.filter(e => e.state === true);
                 if (langs.length > 0) {
@@ -159,6 +155,8 @@ class DefaultExtension extends MProvider {
                 }
             }
         });
+        url += genres_include_url;
+        url += genres_exclude_url;
         const res = await new Client().get(url, this.getHeaders());
         return this.mangaFromSearch(res);
     }
@@ -253,8 +251,8 @@ class DefaultExtension extends MProvider {
         return [
             {
                 type_name: "GroupFilter",
-                type: "genres",
-                name: "Genres",
+                type: "format",
+                name: "Format",
                 state: [
                     ["Artbook", "artbook,"],
                     ["Cartoon", "cartoon,"],
@@ -268,6 +266,13 @@ class DefaultExtension extends MProvider {
                     ["Western", "western,"],
                     ["4-Koma", "_4_koma,"],
                     ["Oneshot", "oneshot,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "demographic",
+                name: "Demographic",
+                state: [
                     ["Shoujo(G)", "shoujo,"],
                     ["Shounen(B)", "shounen,"],
                     ["Josei(W)", "josei,"],
@@ -278,6 +283,13 @@ class DefaultExtension extends MProvider {
                     ["Kodomo(Kid", "kodomo,"],
                     ["Silver & Golden", "old_people,"],
                     ["Non-Human", "non_human,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "content",
+                name: "Content",
+                state: [
                     ["Gore", "gore,"],
                     ["Bloody", "bloody,"],
                     ["Violence", "violence,"],
@@ -286,6 +298,13 @@ class DefaultExtension extends MProvider {
                     ["Mature", "mature,"],
                     ["Smut", "smut,"],
                     ["Hentai", "hentai,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "genres",
+                name: "Genres",
+                state: [
                     ["Action", "action,"],
                     ["Adaption", "adaptation,"],
                     ["Adventure", "adventure,"],

@@ -8,7 +8,7 @@ const mangayomiSources = [{
     "itemType": 0,
     "version": "1.0.1",
     "pkgPath": "manga/src/all/batoto.js",
-    "notes": ""
+    "notes": "Uses web-scraping to pull details and chapters"
 }];
 
 class DefaultExtension extends MProvider {
@@ -163,6 +163,17 @@ class DefaultExtension extends MProvider {
         return this.mangaFromSearch(res);
     }
 
+    /**
+     * 
+     * @param {String} days_ago 
+     */
+    getDate(days_ago) {
+        const date = new Date();
+        const days = parseInt(days_ago.replace(/\D/g, ""));
+        date.setDate(date.getDate() - days);
+        return date.valueOf().toString();
+    }
+
     async getDetail(url) {
         const res = await new Client().get(url, this.getHeaders());
         const doc = new Document(res.body);
@@ -195,7 +206,8 @@ class DefaultExtension extends MProvider {
             const name = chapters[i].selectFirst("a > b").text;
             const url = `${this.getUrl()}` + chapters[i].selectFirst("a.visited.chapt").getHref;
             const scanlator = chapters[i].selectFirst("a.ps-3 > span").text;
-            detail.chapters.push({ name, url, scanlator });
+            const dateUpload = this.getDate(chapters[i].selectFirst("i.ps-3").text);
+            detail.chapters.push({ name, url, scanlator, dateUpload });
         }
 
         return detail

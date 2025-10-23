@@ -163,10 +163,6 @@ class DefaultExtension extends MProvider {
         return this.mangaFromSearch(res);
     }
 
-    /**
-     * 
-     * @param {String} days_ago 
-     */
     getDate(days_ago) {
         const date = new Date();
         const days = parseInt(days_ago.replace(/\D/g, ""));

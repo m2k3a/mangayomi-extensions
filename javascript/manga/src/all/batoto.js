@@ -178,19 +178,19 @@ class DefaultExtension extends MProvider {
         detail.name = doc.selectFirst("h3.item-title > a").text;
         detail.imageUrl = doc.selectFirst("img.shadow-6").getSrc;
 
-        const description_elements = doc.selectFirst("div.col-24.col-sm-16.col-md-18.mt-4.mt-sm-0.attr-main").select("div");
-        for (let i = 0; i < description_elements.length; i++) {
-            if (description_elements[i].selectFirst("b").text == "Authors:") {
-                detail.author = description_elements[i].selectFirst("a").text;
-            } else if (description_elements[i].selectFirst("b").text == "Artists:") {
-                detail.artist = description_elements[i].selectFirst("a").text;
-            } else if (description_elements[i].selectFirst("b").text == "Original work:") {
-                detail.status = this.statusFromString(description_elements[i].selectFirst("span").text);
-            } else if (description_elements[i].selectFirst("b").text == "Genres:") {
-                const genres = description_elements[i].select("span > *");
+        const description_elements = doc.select("div.col-24.col-sm-16.col-md-18.mt-4.mt-sm-0.attr-main > div");
+        for (const description of description_elements) {
+            if (description.selectFirst("b").text == "Authors:") {
+                detail.author = description.selectFirst("a").text;
+            } else if (description.selectFirst("b").text == "Artists:") {
+                detail.artist = description.selectFirst("a").text;
+            } else if (description.selectFirst("b").text == "Original work:") {
+                detail.status = this.statusFromString(description.selectFirst("span").text);
+            } else if (description.selectFirst("b").text == "Genres:") {
+                const genres = description.select("span > *");
                 detail.genre = [];
-                for (let i = 0; i < genres.length; i++) {
-                    detail.genre.push(genres[i].text);
+                for (const genre of genres) {
+                    detail.genre.push(genre.text);
                 }
             }
         }
@@ -198,11 +198,11 @@ class DefaultExtension extends MProvider {
 
         detail.chapters = []
         const chapters = doc.select("div.mt-4.episode-list > div.main > div");
-        for (let i = 0; i < chapters.length; i++) {
-            const name = chapters[i].selectFirst("a > b").text;
-            const url = `${this.getUrl()}` + chapters[i].selectFirst("a.visited.chapt").getHref;
-            const scanlator = chapters[i].selectFirst("a.ps-3 > span").text;
-            const dateUpload = this.getDate(chapters[i].selectFirst("i.ps-3").text);
+        for (const chapter of chapters) {
+            const name = chapter.selectFirst("a > b").text;
+            const url = `${this.getUrl()}` + chapter.selectFirst("a.visited.chapt").getHref;
+            const scanlator = chapter.selectFirst("a.ps-3 > span").text;
+            const dateUpload = this.getDate(chapter.selectFirst("i.ps-3").text);
             detail.chapters.push({ name, url, scanlator, dateUpload });
         }
 

@@ -13,7 +13,20 @@ const mangayomiSources = [{
   "pkgName": "manga/src/zh/baozimh.js"
 }];
 
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
+
 class DefaultExtension extends MProvider {
+  getHeaders(url) {
+    return {
+      "User-Agent": USER_AGENT,
+      "Referer": this.source.baseUrl + "/",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1"
+    };
+  }
   extractMangaList(doc) {
     const elements = doc.select("div.pure-g div a.comics-card__poster");
     const mangas = [];
@@ -35,7 +48,7 @@ class DefaultExtension extends MProvider {
 
   async getPopular(page) {
     const url = `${this.source.baseUrl}/classify?page=${page}`;
-    const res = await new Client().get(url);
+    const res = await new Client().get(url, this.getHeaders(url));
     return this.extractMangaList(new Document(res.body));
   }
 
@@ -45,7 +58,7 @@ class DefaultExtension extends MProvider {
 
   async getLatestUpdates(page) {
     const url = `${this.source.baseUrl}/list/new?page=${page}`;
-    const res = await new Client().get(url);
+    const res = await new Client().get(url, this.getHeaders(url));
     return this.extractMangaList(new Document(res.body));
   }
 
@@ -53,13 +66,13 @@ class DefaultExtension extends MProvider {
     const url = query
       ? `${this.source.baseUrl}/search?q=${encodeURIComponent(query)}`
       : `${this.source.baseUrl}/classify?page=${page}`;
-    const res = await new Client().get(url);
+    const res = await new Client().get(url, this.getHeaders(url));
     return this.extractMangaList(new Document(res.body));
   }
 
   async getDetail(url) {
     if (!url.startsWith("http")) url = this.source.baseUrl + url;
-    const res = await new Client().get(url);
+    const res = await new Client().get(url, this.getHeaders(url));
     const doc = new Document(res.body);
     const name = doc.selectFirst("h1.comics-detail__title").text;
     const author = doc.selectFirst("h2.comics-detail__author").text;
@@ -91,7 +104,7 @@ class DefaultExtension extends MProvider {
 
   async getPageList(url) {
     if (!url.startsWith("http")) url = this.source.baseUrl + url;
-    const res = await new Client().get(url);
+    const res = await new Client().get(url, this.getHeaders(url));
     const doc = new Document(res.body);
     const pages = [];
     const imgs = doc.select(".comic-contain amp-img");

@@ -6,9 +6,9 @@ const mangayomiSources = [{
     "iconUrl": "https://bato.to/amsta/img/btoto/logo-batoto.png?v0",
     "typeSource": "single",
     "itemType": 0,
-    "version": "1.0.1",
+    "version": "1.0.4",
     "pkgPath": "manga/src/all/batoto.js",
-    "notes": ""
+    "notes": "Uses web-scraping to pull details and chapters"
 }];
 
 class DefaultExtension extends MProvider {
@@ -106,22 +106,18 @@ class DefaultExtension extends MProvider {
         } else {
             url += `page=${page}`
         }
+        let genres_include_url = "&genres=";
+        let genres_exclude_url = "%7C";
         filters.forEach(filter => {
-            if (filter.type === "genres") {
+            if (filter.type === "format" || filter.type ==="demographic" || filter.type ==="content" || filter.type ==="genres") {
                 const included = filter.state.filter(e => e.state === 1);
                 const excluded = filter.state.filter(e => e.state === 2);
-                if (included.length > 0 || excluded.length > 0) {
-                    url += "&genres=";
-                }
                 included.forEach(val => {
-                    url += `${val.value}`;
+                    genres_include_url += `${val.value}`;
                 });
-                if (excluded.length > 0) {
-                    url += "%7C"
-                    excluded.forEach(val => {
-                        url += `${val.value}`;
-                    });
-                }
+                excluded.forEach(val => {
+                    genres_exclude_url += `${val.value}`;
+                });
             } else if (filter.type === "translated") {
                 const langs = filter.state.filter(e => e.state === true);
                 if (langs.length > 0) {
@@ -159,8 +155,32 @@ class DefaultExtension extends MProvider {
                 }
             }
         });
+        url += genres_include_url;
+        url += genres_exclude_url;
         const res = await new Client().get(url, this.getHeaders());
         return this.mangaFromSearch(res);
+    }
+
+    getDate(days_ago) {
+        const date = new Date();
+        const time = parseInt(days_ago.replace(/\D/g, ""));
+        if (days_ago.search("sec") >= 0) {
+            date.setSeconds(date.getSeconds() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else if (days_ago.search("min") >= 0) {
+            date.setMinutes(date.getMinutes() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else if (days_ago.search("hour") >= 0) {
+            date.setHours(date.getHours() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        } else {
+            date.setDate(date.getDate() - time);
+            console.log(date);
+            return date.valueOf().toString();
+        }
     }
 
     async getDetail(url) {
@@ -171,19 +191,19 @@ class DefaultExtension extends MProvider {
         detail.name = doc.selectFirst("h3.item-title > a").text;
         detail.imageUrl = doc.selectFirst("img.shadow-6").getSrc;
 
-        const description_elements = doc.selectFirst("div.col-24.col-sm-16.col-md-18.mt-4.mt-sm-0.attr-main").select("div");
-        for (let i = 0; i < description_elements.length; i++) {
-            if (description_elements[i].selectFirst("b").text == "Authors:") {
-                detail.author = description_elements[i].selectFirst("a").text;
-            } else if (description_elements[i].selectFirst("b").text == "Artists:") {
-                detail.artist = description_elements[i].selectFirst("a").text;
-            } else if (description_elements[i].selectFirst("b").text == "Original work:") {
-                detail.status = this.statusFromString(description_elements[i].selectFirst("span").text);
-            } else if (description_elements[i].selectFirst("b").text == "Genres:") {
-                const genres = description_elements[i].select("span > *");
+        const description_elements = doc.select("div.col-24.col-sm-16.col-md-18.mt-4.mt-sm-0.attr-main > div");
+        for (const description of description_elements) {
+            if (description.selectFirst("b").text == "Authors:") {
+                detail.author = description.selectFirst("a").text;
+            } else if (description.selectFirst("b").text == "Artists:") {
+                detail.artist = description.selectFirst("a").text;
+            } else if (description.selectFirst("b").text == "Original work:") {
+                detail.status = this.statusFromString(description.selectFirst("span").text);
+            } else if (description.selectFirst("b").text == "Genres:") {
+                const genres = description.select("span > *");
                 detail.genre = [];
-                for (let i = 0; i < genres.length; i++) {
-                    detail.genre.push(genres[i].text);
+                for (const genre of genres) {
+                    detail.genre.push(genre.text);
                 }
             }
         }
@@ -191,11 +211,12 @@ class DefaultExtension extends MProvider {
 
         detail.chapters = []
         const chapters = doc.select("div.mt-4.episode-list > div.main > div");
-        for (let i = 0; i < chapters.length; i++) {
-            const name = chapters[i].selectFirst("a > b").text;
-            const url = `${this.getUrl()}` + chapters[i].selectFirst("a.visited.chapt").getHref;
-            const scanlator = chapters[i].selectFirst("a.ps-3 > span").text;
-            detail.chapters.push({ name, url, scanlator });
+        for (const chapter of chapters) {
+            const name = chapter.selectFirst("a > b").text;
+            const url = `${this.getUrl()}` + chapter.selectFirst("a.visited.chapt").getHref;
+            const scanlator = chapter.selectFirst("a.ps-3 > span").text;
+            const dateUpload = this.getDate(chapter.selectFirst("i.ps-3").text);
+            detail.chapters.push({ name, url, scanlator, dateUpload });
         }
 
         return detail
@@ -230,8 +251,8 @@ class DefaultExtension extends MProvider {
         return [
             {
                 type_name: "GroupFilter",
-                type: "genres",
-                name: "Genres",
+                type: "format",
+                name: "Format",
                 state: [
                     ["Artbook", "artbook,"],
                     ["Cartoon", "cartoon,"],
@@ -245,6 +266,13 @@ class DefaultExtension extends MProvider {
                     ["Western", "western,"],
                     ["4-Koma", "_4_koma,"],
                     ["Oneshot", "oneshot,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "demographic",
+                name: "Demographic",
+                state: [
                     ["Shoujo(G)", "shoujo,"],
                     ["Shounen(B)", "shounen,"],
                     ["Josei(W)", "josei,"],
@@ -255,6 +283,13 @@ class DefaultExtension extends MProvider {
                     ["Kodomo(Kid", "kodomo,"],
                     ["Silver & Golden", "old_people,"],
                     ["Non-Human", "non_human,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "content",
+                name: "Content",
+                state: [
                     ["Gore", "gore,"],
                     ["Bloody", "bloody,"],
                     ["Violence", "violence,"],
@@ -263,6 +298,13 @@ class DefaultExtension extends MProvider {
                     ["Mature", "mature,"],
                     ["Smut", "smut,"],
                     ["Hentai", "hentai,"],
+                ].map(x => ({ type_name: 'TriState', name: x[0], value: x[1] }))
+            },
+            {
+                type_name: "GroupFilter",
+                type: "genres",
+                name: "Genres",
+                state: [
                     ["Action", "action,"],
                     ["Adaption", "adaptation,"],
                     ["Adventure", "adventure,"],

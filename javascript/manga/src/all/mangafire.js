@@ -7,7 +7,7 @@ const mangayomiSources = [
     "iconUrl": "https://mangafire.to/assets/sites/mangafire/favicon.png?v3",
     "typeSource": "single",
     "itemType": 0,
-    "version": "0.2.0",
+    "version": "0.2.1",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "manga/src/all/mangafire.js"
@@ -100,7 +100,6 @@ class DefaultExtension extends MProvider {
   }
 
   async search(query, page, filters) {
-    var keyword = query.trim().replaceAll(/\ +/g, "+");
     var slug = `language=${this.source.lang}&page=${page}`;
 
     // Search sometimes failed because filters were empty. I experienced this mostly on android...
@@ -127,7 +126,7 @@ class DefaultExtension extends MProvider {
     }
 
     return await this.filterPage({
-      keyword,
+      keyword:query,
       slug,
     });
   }

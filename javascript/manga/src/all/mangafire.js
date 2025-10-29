@@ -7,7 +7,7 @@ const mangayomiSources = [
     "iconUrl": "https://mangafire.to/assets/sites/mangafire/favicon.png?v3",
     "typeSource": "single",
     "itemType": 0,
-    "version": "0.2.0",
+    "version": "0.2.15",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "manga/src/all/mangafire.js"
@@ -100,7 +100,6 @@ class DefaultExtension extends MProvider {
   }
 
   async search(query, page, filters) {
-    var keyword = query.trim().replaceAll(/\ +/g, "+");
     var slug = `language=${this.source.lang}&page=${page}`;
 
     // Search sometimes failed because filters were empty. I experienced this mostly on android...
@@ -127,7 +126,7 @@ class DefaultExtension extends MProvider {
     }
 
     return await this.filterPage({
-      keyword,
+      keyword: query,
       slug,
     });
   }
@@ -208,18 +207,22 @@ class DefaultExtension extends MProvider {
 
   // For manga chapter pages
   async getPageList(url) {
+   const fetch = async (chapid, viewType) => {
+    const vrfKey = `${viewType}@${chapid}`;
+    const vrf = this.generate_vrf(vrfKey);
+
+    const reqUrl =
+      this.source.baseUrl + `/ajax/read/${viewType}/${chapid}?vrf=${vrf}`;
+    return await new Client().get(reqUrl);
+  };
     var chapid = url;
     const viewType = this.getPreference("mangafire_pref_content_view");
-
-    var vrfKey = `${viewType}@${chapid}`;
-    var vrf = this.generate_vrf(vrfKey);
-
-    var url =
-      this.source.baseUrl + `/ajax/read/${viewType}/${chapid}?vrf=${vrf}`;
-    var res = await new Client().get(url);
+    var res = await fetch(chapid, viewType);
     if (res.statusCode != 200) {
-      url = url.replace("/volume/", "/chapter/");
-      res = await new Client().get(url);
+      res = await fetch(chapid, "chapter");
+    }
+    if (res.statusCode != 200) {
+      throw new Error("Chapter/Volume unavailable.");
     }
     const data = JSON.parse(res.body);
     const pages = [];

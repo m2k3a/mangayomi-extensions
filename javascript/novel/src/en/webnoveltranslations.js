@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://raw.githubusercontent.com/entityJY/mangayomi-extensions-eJ/main/javascript/icon/en.webnoveltranslations.png",
     "typeSource": "single",
     "itemType": 2,
-    "version": "1.0.0",
+    "version": "1.0.1",
     "pkgPath": "novel/src/en/webnoveltranslations.js",
     "notes": ""
 }];
@@ -127,12 +127,8 @@ class DefaultExtension extends MProvider {
         const doc = new Document(html);
         const title = doc.selectFirst("#chapter-heading")?.text.trim() || "";
         
-        const content = doc.select("#novel-chapter-container.text-left > p");
-        let chapterContent = "";
-        for (const line of content) {
-          chapterContent += "<p>" + line.text + "</p>";
-        };
-        return `<h2>${title}</h2><hr><br>${chapterContent}`;
+        const content = doc.selectFirst("#novel-chapter-container.text-left")?.innerHtml;
+        return `<h2>${title}</h2><hr><br>${content}`;
     }
     // For anime episode video list
     async getVideoList(url) {

@@ -7,7 +7,7 @@ const mangayomiSources = [
     "iconUrl": "https://mangafire.to/assets/sites/mangafire/favicon.png?v3",
     "typeSource": "single",
     "itemType": 0,
-    "version": "0.2.15",
+    "version": "0.2.20",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "manga/src/all/mangafire.js"
@@ -207,14 +207,14 @@ class DefaultExtension extends MProvider {
 
   // For manga chapter pages
   async getPageList(url) {
-   const fetch = async (chapid, viewType) => {
-    const vrfKey = `${viewType}@${chapid}`;
-    const vrf = this.generate_vrf(vrfKey);
+    const fetch = async (chapid, viewType) => {
+      const vrfKey = `${viewType}@${chapid}`;
+      const vrf = this.generate_vrf(vrfKey);
 
-    const reqUrl =
-      this.source.baseUrl + `/ajax/read/${viewType}/${chapid}?vrf=${vrf}`;
-    return await new Client().get(reqUrl);
-  };
+      const reqUrl =
+        this.source.baseUrl + `/ajax/read/${viewType}/${chapid}?vrf=${vrf}`;
+      return await new Client().get(reqUrl);
+    };
     var chapid = url;
     const viewType = this.getPreference("mangafire_pref_content_view");
     var res = await fetch(chapid, viewType);
@@ -467,11 +467,11 @@ class DefaultExtension extends MProvider {
     return out;
   }
 
-  // One generic “step” to remove repeated boilerplate.
-  transform(input, initSeedBytes, prefixKeyString, prefixLen, schedule) {
+  // One generic "step" to remove repeated boilerplate.
+  transform(input, initSeedBytes, prefixKeyBytes, prefixLen, schedule) {
     const out = [];
     for (let i = 0; i < input.length; i++) {
-      if (i < prefixLen) out.push(prefixKeyString.charCodeAt(i) & 0xff);
+      if (i < prefixLen) out.push(prefixKeyBytes[i]);
 
       out.push(
         schedule[i % 10]((input[i] ^ initSeedBytes[i % 32]) & 0xff) & 0xff
@@ -495,158 +495,153 @@ class DefaultExtension extends MProvider {
     return this.toBytes(this.b64encode(b64));
   }
 
+  // Helper for rotate right
+  rotr8 = (n) => (c) => ((c >>> n) | (c << (8 - n))) & 0xff;
+
   generate_vrf(input) {
     // Schedules for each step (10 ops each, indexed by i % 10)
-    const scheduleC = [
-      this.sub8(48),
-      this.sub8(19),
-      this.xor8(241),
-      this.sub8(19),
-      this.add8(223),
-      this.sub8(19),
-      this.sub8(170),
-      this.sub8(19),
-      this.sub8(48),
-      this.xor8(8),
+    const schedule0 = [
+      this.sub8(223),
+      this.rotr8(4),
+      this.rotr8(4),
+      this.add8(234),
+      this.rotr8(7),
+      this.rotr8(2),
+      this.rotr8(7),
+      this.sub8(223),
+      this.rotr8(7),
+      this.rotr8(6),
     ];
 
-    const scheduleY = [
-      this.rotl8(4),
-      this.add8(223),
-      this.rotl8(4),
-      this.xor8(163),
-      this.sub8(48),
-      this.add8(82),
-      this.add8(223),
-      this.sub8(48),
-      this.xor8(83),
-      this.rotl8(4),
+    const schedule1 = [
+      this.add8(19),
+      this.rotr8(7),
+      this.add8(19),
+      this.rotr8(6),
+      this.add8(19),
+      this.rotr8(1),
+      this.add8(19),
+      this.rotr8(6),
+      this.rotr8(7),
+      this.rotr8(4),
     ];
 
-    const scheduleB = [
-      this.sub8(19),
-      this.add8(82),
-      this.sub8(48),
-      this.sub8(170),
-      this.rotl8(4),
-      this.sub8(48),
-      this.sub8(170),
-      this.xor8(8),
-      this.add8(82),
-      this.xor8(163),
+    const schedule2 = [
+      this.sub8(223),
+      this.rotr8(1),
+      this.add8(19),
+      this.sub8(223),
+      this.rotl8(2),
+      this.sub8(223),
+      this.add8(19),
+      this.rotl8(1),
+      this.rotl8(2),
+      this.rotl8(1),
     ];
 
-    const scheduleJ = [
-      this.add8(223),
+    const schedule3 = [
+      this.add8(19),
+      this.rotl8(1),
+      this.rotl8(1),
+      this.rotr8(1),
+      this.add8(234),
+      this.rotl8(1),
+      this.sub8(223),
+      this.rotl8(6),
       this.rotl8(4),
-      this.add8(223),
-      this.xor8(83),
-      this.sub8(19),
-      this.add8(223),
-      this.sub8(170),
-      this.add8(223),
-      this.sub8(170),
-      this.xor8(83),
+      this.rotl8(1),
     ];
 
-    const scheduleE = [
-      this.add8(82),
-      this.xor8(83),
-      this.xor8(163),
-      this.add8(82),
-      this.sub8(170),
-      this.xor8(8),
-      this.xor8(241),
-      this.add8(82),
-      this.add8(176),
-      this.rotl8(4),
+    const schedule4 = [
+      this.rotr8(1),
+      this.rotl8(1),
+      this.rotl8(6),
+      this.rotr8(1),
+      this.rotl8(2),
+      this.rotr8(4),
+      this.rotl8(1),
+      this.rotl8(1),
+      this.sub8(223),
+      this.rotl8(2),
     ];
-    // Constants — grouped logically and left as-is (base64) for clarity.
+
+
     const CONST = {
-      "rc4Keys": {
-        "l": "u8cBwTi1CM4XE3BkwG5Ble3AxWgnhKiXD9Cr279yNW0=",
-        "g": "t00NOJ/Fl3wZtez1xU6/YvcWDoXzjrDHJLL2r/IWgcY=",
-        "B": "S7I+968ZY4Fo3sLVNH/ExCNq7gjuOHjSRgSqh6SsPJc=",
-        "m": "7D4Q8i8dApRj6UWxXbIBEa1UqvjI+8W0UvPH9talJK8=",
-        "F": "0JsmfWZA1kwZeWLk5gfV5g41lwLL72wHbam5ZPfnOVE=",
-      },
-      "seeds32": {
-        "A": "pGjzSCtS4izckNAOhrY5unJnO2E1VbrU+tXRYG24vTo=",
-        "V": "dFcKX9Qpu7mt/AD6mb1QF4w+KqHTKmdiqp7penubAKI=",
-        "N": "owp1QIY/kBiRWrRn9TLN2CdZsLeejzHhfJwdiQMjg3w=",
-        "P": "H1XbRvXOvZAhyyPaO68vgIUgdAHn68Y6mrwkpIpEue8=",
-        "k": "2Nmobf/mpQ7+Dxq1/olPSDj3xV8PZkPbKaucJvVckL0=",
-      },
-      "prefixKeys": {
-        "O": "Rowe+rg/0g==",
-        "v": "8cULcnOMJVY8AA==",
-        "L": "n2+Og2Gth8Hh",
-        "p": "aRpvzH+yoA==",
-        "W": "ZB4oBi0=",
-      },
+      "rc4Keys": [
+        "FgxyJUQDPUGSzwbAq/ToWn4/e8jYzvabE+dLMb1XU1o=",
+        "CQx3CLwswJAnM1VxOqX+y+f3eUns03ulxv8Z+0gUyik=",
+        "fAS+otFLkKsKAJzu3yU+rGOlbbFVq+u+LaS6+s1eCJs=",
+        "Oy45fQVK9kq9019+VysXVlz1F9S1YwYKgXyzGlZrijo=",
+        "aoDIdXezm2l3HrcnQdkPJTDT8+W6mcl2/02ewBHfPzg=",
+      ],
+      "seeds32": [
+        "yH6MXnMEcDVWO/9a6P9W92BAh1eRLVFxFlWTHUqQ474=",
+        "RK7y4dZ0azs9Uqz+bbFB46Bx2K9EHg74ndxknY9uknA=",
+        "rqr9HeTQOg8TlFiIGZpJaxcvAaKHwMwrkqojJCpcvoc=",
+        "/4GPpmZXYpn5RpkP7FC/dt8SXz7W30nUZTe8wb+3xmU=",
+        "wsSGSBXKWA9q1oDJpjtJddVxH+evCfL5SO9HZnUDFU8=",
+      ],
+      "prefixKeys": [
+        "l9PavRg=",
+        "Ml2v7ag1Jg==",
+        "i/Va0UxrbMo=",
+        "WFjKAHGEkQM=",
+        "5Rr27rWd",
+      ],
     };
 
     // Stage 0: normalize to URI-encoded bytes
     let bytes = this.toBytes(encodeURIComponent(input));
 
-    // RC4 1
-    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys.l), bytes);
-
-    // Step C1
+    // RC4
+    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys[0]), bytes);
+    const prefixKey0 = this.bytesFromBase64(CONST.prefixKeys[0]);
     bytes = this.transform(
       bytes,
-      this.bytesFromBase64(CONST.seeds32.A),
-      this.b64encode(CONST.prefixKeys.O),
-      7,
-      scheduleC
+      this.bytesFromBase64(CONST.seeds32[0]),
+      prefixKey0,
+      prefixKey0.length,
+      schedule0
     );
 
-    // RC4 2
-    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys.g), bytes);
-
-    // Step Y
+    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys[1]), bytes);
+    const prefixKey1 = this.bytesFromBase64(CONST.prefixKeys[1]);
     bytes = this.transform(
       bytes,
-      this.bytesFromBase64(CONST.seeds32.V),
-      this.b64encode(CONST.prefixKeys.v),
-      10,
-      scheduleY
+      this.bytesFromBase64(CONST.seeds32[1]),
+      prefixKey1,
+      prefixKey1.length,
+      schedule1
     );
 
-    // RC4 3
-    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys.B), bytes);
-
-    // Step B
+    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys[2]), bytes);
+    const prefixKey2 = this.bytesFromBase64(CONST.prefixKeys[2]);
     bytes = this.transform(
       bytes,
-      this.bytesFromBase64(CONST.seeds32.N),
-      this.b64encode(CONST.prefixKeys.L),
-      9,
-      scheduleB
+      this.bytesFromBase64(CONST.seeds32[2]),
+      prefixKey2,
+      prefixKey2.length,
+      schedule2
     );
 
-    // RC4 4
-    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys.m), bytes);
-
-    // Step J
+    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys[3]), bytes);
+    const prefixKey3 = this.bytesFromBase64(CONST.prefixKeys[3]);
     bytes = this.transform(
       bytes,
-      this.bytesFromBase64(CONST.seeds32.P),
-      this.b64encode(CONST.prefixKeys.p),
-      7,
-      scheduleJ
+      this.bytesFromBase64(CONST.seeds32[3]),
+      prefixKey3,
+      prefixKey3.length,
+      schedule3
     );
 
-    // RC4 5
-    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys.F), bytes);
-
-    // Step E
+    bytes = this.rc4Bytes(this.b64encode(CONST.rc4Keys[4]), bytes);
+    const prefixKey4 = this.bytesFromBase64(CONST.prefixKeys[4]);
     bytes = this.transform(
       bytes,
-      this.bytesFromBase64(CONST.seeds32.k),
-      this.b64encode(CONST.prefixKeys.W),
-      5,
-      scheduleE
+      this.bytesFromBase64(CONST.seeds32[4]),
+      prefixKey4,
+      prefixKey4.length,
+      schedule4
     );
 
     // Base64URL

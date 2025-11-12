@@ -376,6 +376,14 @@ class DefaultExtension extends MProvider {
       return `<h2>${title}</h2><hr><br>${content}`;
     }
 
+    if (domain.includes("webnoveltranslations")) {
+        const doc = new Document(html);
+        const title = doc.selectFirst("#chapter-heading")?.text.trim() || "";
+        
+        const content = doc.selectFirst("#novel-chapter-container.text-left")?.innerHtml;
+        return `<h2>${title}</h2><hr><br>${content}`;
+    }
+
     if (domain.includes("webnovel")) {
       const title =
         doc.selectFirst("#page > .chapter_content > .cha-tit > div > div")?.text.trim() ||

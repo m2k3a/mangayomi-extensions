@@ -458,8 +458,8 @@ class DopeFlix extends MProvider {
           title: "Preferred domain",
           summary: "",
           valueIndex: 0,
-          entries: ["sflix.to", "sflix.se"],
-          entryValues: ["https://sflix.to", "https://sflix.se"],
+          entries: ["sflix.to", "sflix.se", "sflix.ps"],
+          entryValues: ["https://sflix.to", "https://sflix.se", "https://sflix.ps"],
         ),
       ListPreference(
         key: "preferred_quality",

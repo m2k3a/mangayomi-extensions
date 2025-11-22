@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.novelupdates.png",
   "typeSource": "single",
   "itemType": 2,
-  "version": "0.0.4",
+  "version": "0.0.5",
   "dateFormat": "",
   "dateFormatLocale": "",
   "pkgPath": "novel/src/en/novelupdates.js",
@@ -168,7 +168,7 @@ class DefaultExtension extends MProvider {
       });
     }
 
-    chapters.reverse();
+    //chapters.reverse()
 
     return {
       imageUrl,

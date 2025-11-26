@@ -5,7 +5,7 @@ const mangayomiSources = [{
   "iconUrl": "https://i.ibb.co/TDfbbwDB/Untitled-design.png",
   "typeSource": "single",
   "itemType": 0,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "pkgPath": "manga/src/zh/rumanhua1.js"
 }];
 

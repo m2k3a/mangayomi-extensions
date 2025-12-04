@@ -1,7 +1,7 @@
 const mangayomiSources = [{
     "name": "AllAnime",
     "lang": "en",
-    "baseUrl": "https://allanime.to",
+    "baseUrl": "https://allmanga.to",
     "apiUrl": "https://api.allanime.day/api",
     "iconUrl": "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.allanime.png",
     "typeSource": "single",

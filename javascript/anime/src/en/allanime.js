@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "itemType": 1,
     "isNsfw": false,
-    "version": "0.0.35",
+    "version": "0.0.4",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "anime/src/en/allanime.js"

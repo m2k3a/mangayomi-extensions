@@ -6,7 +6,7 @@ const animesamaCodeUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/anime/src/fr/animesama/animesama.dart";
 Source _animesama = Source(
   name: "Anime-Sama",
-  baseUrl: "https://anime-sama.fr",
+  baseUrl: "https://anime-sama.tv",
   lang: "fr",
   typeSource: "single",
   iconUrl:

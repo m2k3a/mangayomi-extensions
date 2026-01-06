@@ -9,8 +9,11 @@ class AnimeSama extends MProvider {
   final Client client = Client();
 
   @override
+  String get baseUrl => getPreferenceValue(source.id, "overrideBaseUrl");
+
+  @override
   Future<MPages> getPopular(int page) async {
-    final doc = (await client.get(Uri.parse("${source.baseUrl}/#$page"))).body;
+    final doc = (await client.get(Uri.parse("$baseUrl/#$page"))).body;
     final regex = RegExp(
       r"""^\s*carteClassique\(\s*.*?\s*,\s*"(.*?)".*\)""",
       multiLine: true,
@@ -21,9 +24,7 @@ class AnimeSama extends MProvider {
     if (page > 0 && page <= chunks.length) {
       for (RegExpMatch match in chunks[page - 1]) {
         seasons.addAll(
-          await fetchAnimeSeasons(
-            "${source.baseUrl}/catalogue/${match.group(1)}",
-          ),
+          await fetchAnimeSeasons("$baseUrl/catalogue/${match.group(1)}"),
         );
       }
     }
@@ -32,21 +33,18 @@ class AnimeSama extends MProvider {
 
   @override
   Future<MPages> getLatestUpdates(int page) async {
-    final res = (await client.get(Uri.parse(source.baseUrl))).body;
+    final res = (await client.get(Uri.parse(baseUrl))).body;
     var document = parseHtml(res);
-    final latest =
-        document
-            .select("h2")
-            .where(
-              (MElement e) => e.outerHtml.toLowerCase().contains(
-                "derniers épisodes ajoutés",
-              ),
-            )
-            .toList();
-    final seasonElements =
-        (latest.first.parent.nextElementSibling as MElement)
-            .select("div")
-            .toList();
+    final latest = document
+        .select("h2")
+        .where(
+          (MElement e) =>
+              e.outerHtml.toLowerCase().contains("derniers épisodes ajoutés"),
+        )
+        .toList();
+    final seasonElements = (latest.first.parent.nextElementSibling as MElement)
+        .select("div")
+        .toList();
     List<MManga> seasons = [];
     for (var seasonElement in seasonElements) {
       seasons.addAll(
@@ -61,73 +59,62 @@ class AnimeSama extends MProvider {
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     final filters = filterList.filters;
-    final res =
-        (await client.get(
-          Uri.parse("${source.baseUrl}/catalogue/listing_all.php"),
-        )).body;
+    final res = (await client.get(
+      Uri.parse("$baseUrl/catalogue/listing_all.php"),
+    )).body;
     var databaseElements = parseHtml(res).select(".cardListAnime");
     List<MElement> elements = [];
-    elements =
-        databaseElements
-            .where(
-              (MElement element) => element
-                  .select("h1, p")
-                  .any(
-                    (MElement e) => e.text.toLowerCase().contains(
-                      query.toLowerCase().trim(),
-                    ),
-                  ),
-            )
-            .toList();
+    elements = databaseElements
+        .where(
+          (MElement element) => element
+              .select("h1, p")
+              .any(
+                (MElement e) =>
+                    e.text.toLowerCase().contains(query.toLowerCase().trim()),
+              ),
+        )
+        .toList();
     for (var filter in filters) {
       if (filter.type == "TypeFilter") {
         final types = (filter.state as List).where((e) => e.state).toList();
-        elements =
-            elements
-                .where(
-                  (MElement element) =>
-                      types.isEmpty ||
-                      types.any((p) => element.className.contains(p.value)),
-                )
-                .toList();
+        elements = elements
+            .where(
+              (MElement element) =>
+                  types.isEmpty ||
+                  types.any((p) => element.className.contains(p.value)),
+            )
+            .toList();
       } else if (filter.type == "LanguageFilter") {
         final language = (filter.state as List).where((e) => e.state).toList();
-        elements =
-            elements
-                .where(
-                  (MElement element) =>
-                      language.isEmpty ||
-                      language.any((p) => element.className.contains(p.value)),
-                )
-                .toList();
+        elements = elements
+            .where(
+              (MElement element) =>
+                  language.isEmpty ||
+                  language.any((p) => element.className.contains(p.value)),
+            )
+            .toList();
       } else if (filter.type == "GenreFilter") {
-        final included =
-            (filter.state as List)
-                .where((e) => e.state == 1 ? true : false)
-                .toList();
-        final excluded =
-            (filter.state as List)
-                .where((e) => e.state == 2 ? true : false)
-                .toList();
+        final included = (filter.state as List)
+            .where((e) => e.state == 1 ? true : false)
+            .toList();
+        final excluded = (filter.state as List)
+            .where((e) => e.state == 2 ? true : false)
+            .toList();
         if (included.isNotEmpty) {
-          elements =
-              elements
-                  .where(
-                    (MElement element) => included.every(
-                      (p) => element.className.contains(p.value),
-                    ),
-                  )
-                  .toList();
+          elements = elements
+              .where(
+                (MElement element) =>
+                    included.every((p) => element.className.contains(p.value)),
+              )
+              .toList();
         }
         if (excluded.isNotEmpty) {
-          elements =
-              elements
-                  .where(
-                    (MElement element) => excluded.every(
-                      (p) => element.className.contains(p.value),
-                    ),
-                  )
-                  .toList();
+          elements = elements
+              .where(
+                (MElement element) =>
+                    excluded.every((p) => element.className.contains(p.value)),
+              )
+              .toList();
         }
       }
     }
@@ -148,7 +135,7 @@ class AnimeSama extends MProvider {
   @override
   Future<MManga> getDetail(String url) async {
     var animeUrl =
-        "${source.baseUrl}${substringBeforeLast(getUrlWithoutDomain(url), "/")}";
+        "$baseUrl${substringBeforeLast(getUrlWithoutDomain(url), "/")}";
     var movie = int.tryParse(
       url.split("#").length >= 2 ? url.split("#")[1] : "",
     );
@@ -198,8 +185,9 @@ class AnimeSama extends MProvider {
     }
 
     MManga anime = MManga();
-    anime.chapters =
-        movie == null ? episodesList.reversed.toList() : [episodesList[movie]];
+    anime.chapters = movie == null
+        ? episodesList.reversed.toList()
+        : [episodesList[movie]];
     return anime;
   }
 
@@ -356,6 +344,15 @@ class AnimeSama extends MProvider {
   @override
   List<dynamic> getSourcePreferences() {
     return [
+      EditTextPreference(
+        key: "overrideBaseUrl",
+        title: "Override BaseUrl",
+        summary: "",
+        value: "https://anime-sama.tv",
+        dialogTitle: "Remplacer BaseUrl",
+        dialogMessage: "",
+        text: "https://anime-sama.tv",
+      ),
       ListPreference(
         key: "preferred_quality",
         title: "Qualité préférée",
@@ -401,8 +398,9 @@ class AnimeSama extends MProvider {
               multiLine: true,
             );
             var moviesDoc = (await client.get(Uri.parse(moviesUrl))).body;
-            List<RegExpMatch> matches =
-                movieNameRegex.allMatches(moviesDoc).toList();
+            List<RegExpMatch> matches = movieNameRegex
+                .allMatches(moviesDoc)
+                .toList();
 
             for (var i = 0; i < movies.length; i++) {
               var title = "";
@@ -417,11 +415,12 @@ class AnimeSama extends MProvider {
               }
               MManga anime = MManga();
               anime.imageUrl = document.getElementById("coverOeuvre")?.getSrc;
-              anime.genre = (document.xpathFirst(
-                        '//h2[contains(text(),"Genres")]/following-sibling::a/text()',
-                      ) ??
-                      "")
-                  .split(",");
+              anime.genre =
+                  (document.xpathFirst(
+                            '//h2[contains(text(),"Genres")]/following-sibling::a/text()',
+                          ) ??
+                          "")
+                      .split(",");
               anime.description =
                   document.xpathFirst(
                     '//h2[contains(text(),"Synopsis")]/following-sibling::p/text()',
@@ -437,11 +436,12 @@ class AnimeSama extends MProvider {
         } else {
           MManga anime = MManga();
           anime.imageUrl = document.getElementById("coverOeuvre")?.getSrc;
-          anime.genre = (document.xpathFirst(
-                    '//h2[contains(text(),"Genres")]/following-sibling::a/text()',
-                  ) ??
-                  "")
-              .split(",");
+          anime.genre =
+              (document.xpathFirst(
+                        '//h2[contains(text(),"Genres")]/following-sibling::a/text()',
+                      ) ??
+                      "")
+                  .split(",");
           anime.description =
               document.xpathFirst(
                 '//h2[contains(text(),"Synopsis")]/following-sibling::p/text()',

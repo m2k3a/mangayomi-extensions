@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "itemType": 1,
     "isNsfw": false,
-    "version": "0.0.9",
+    "version": "0.1.0",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "anime/src/de/serienstream.js"
@@ -161,42 +161,47 @@ class DefaultExtension extends MProvider {
     async getUploadDateFromEpisode(url) {
         const baseUrl = this.source.baseUrl;
         const res = await this.client.get(baseUrl + url);
-        const getLastSundayOfMonth = (year, month) => {
-            const lastDay = this.createDate(year, month, 0);
-            const lastSunday = lastDay.getDate() - lastDay.getDay();
-            return this.createDate(year, month - 1, lastSunday);
-        };
         const document = new Document(res.body);
-        const dateString = document.selectFirst('strong[style="color: white;"]').text;
-        const dateTimePart = dateString.split(", ")[1];
-        const [date, time] = dateTimePart.split(" ");
-        const [day, month, year] = date.split(".");
-        const [hours, minutes] = time.split(":");
-        const dayInt = parseInt(day);
-        const monthInt = parseInt(month);
-        const yearInt = parseInt(year);
-        const hoursInt = parseInt(hours);
-        const minutesInt = parseInt(minutes);
-        const lastSundayOfMarch = getLastSundayOfMonth(yearInt, 3);
-        const lastSundayOfOctober = getLastSundayOfMonth(yearInt, 10);
-        const jsDate = this.createDate(yearInt, monthInt - 1, dayInt, hoursInt, minutesInt);
-        // If Date between lastSundayOfMarch & lastSundayOfOctober -> CEST (MESZ)
-        const isInDST = jsDate >= lastSundayOfMarch && jsDate < lastSundayOfOctober;
-        let timeZoneOffset = isInDST ? 0 : 1;
-        // If it's in CEST, subtract 1 hour from UTC (to get local time in CEST)
-        const correctedTime = this.createDate(jsDate.getTime() + (timeZoneOffset - 1) * 60 * 60 * 1000);
-        return String(correctedTime.valueOf()); // dateUpload is a string containing date expressed in millisecondsSinceEpoch.
+        const dateString = document.selectFirst('strong[style="color: white;"]').text; // Dienstag, 16.12.2025 19:45
+        const cleanDateString = dateString.split(", ")[1]; // 16.12.2025 19:45
+        const [date, time] = cleanDateString.split(" "); // Split into "16.12.2025" and "19:45"
+        const [day, month, year] = date.split("."); // Parse day, month, year
+        const [hour, minute] = time.split(":"); // Parse hour and minute
+        // Build a UTC timestamp from the parsed components.
+        // This avoids accidental timezone shifts from the local environment.
+        const utcBase = new Date(Date.UTC(
+            Number(year),
+            Number(month) - 1, // JS months start with 0
+            Number(day),
+            Number(hour),
+            Number(minute)
+        ));
+        // Determine whether this UTC moment falls inside German DST.
+        // If yes → UTC+2, otherwise → UTC+1.
+        const offsetHours = this.isGermanDST(utcBase) ? 2 : 1;
+        // Convert the UTC timestamp into the actual German local instant.
+        // Subtracting the offset gives the correct epoch milliseconds.
+        const germanInstant =
+            utcBase.getTime() - offsetHours * 60 * 60 * 1000;
+        return germanInstant.toString(); // dateUpload is a string containing date expressed in millisecondsSinceEpoch.
     }
 
-    createDate(yearOrNum, month, day) {
-        if (yearOrNum && month && day) {
-            return day < 1 ? new Date(Math.max(new Date().getFullYear(), yearOrNum), Math.max(0, month)) : 
-                new Date(Math.max(new Date().getFullYear(), yearOrNum), Math.max(0, month), day);
-        } else if (yearOrNum) {
-            return new Date(yearOrNum);
-        } else {
-            return new Date();
-        }
+    isGermanDST(dateUTC) {
+        const year = dateUTC.getUTCFullYear(); // Extract the year from the UTC date
+        // Helper: compute the last Sunday of a given month (0-based)
+        const lastSunday = (month) => {
+            const d = new Date(Date.UTC(year, month + 1, 0)); // Start at the last day of the month
+            d.setUTCDate(d.getUTCDate() - d.getUTCDay()); // Move backward to the previous Sunday
+            return d;
+        };
+        // DST in Germany starts on the last Sunday of March at 01:00 UTC
+        const dstStart = lastSunday(2);
+        dstStart.setUTCHours(1);
+        // DST ends on the last Sunday of October at 01:00 UTC
+        const dstEnd = lastSunday(9);
+        dstEnd.setUTCHours(1);
+        // True if the given UTC time is within the DST interval
+        return dateUTC >= dstStart && dateUTC < dstEnd;
     }
 
     async getVideoList(url) {

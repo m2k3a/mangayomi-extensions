@@ -2,13 +2,13 @@ const mangayomiSources = [
   {
     "name": "Annas Archive",
     "lang": "en",
-    "baseUrl": "https://annas-archive.org",
+    "baseUrl": "https://annas-archive.li",
     "apiUrl": "",
     "iconUrl":
       "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/all.annasarchive.png",
     "typeSource": "single",
     "itemType": 2,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "appMinVerReq": "0.6.1",
     "dateFormat": "",
     "dateFormatLocale": "",

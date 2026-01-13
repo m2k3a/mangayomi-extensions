@@ -87,7 +87,7 @@ import 'src/tr/shijiescans/shijiescans.dart';
 import 'src/tr/summertoon/summertoon.dart';
 import 'src/tr/zenithscans/zenithscans.dart';
 
-const mangareaderVersion = "0.1.65";
+const mangareaderVersion = "0.1.66";
 const mangareaderSourceCodeUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/manga/multisrc/mangareader/mangareader.dart";
 

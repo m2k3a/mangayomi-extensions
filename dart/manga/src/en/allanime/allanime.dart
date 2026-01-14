@@ -1,15 +1,6 @@
 import 'package:mangayomi/bridge_lib.dart';
 import 'dart:convert';
 
-enum Status {
-  ongoing,
-  completed,
-  canceled,
-  unknown,
-  onHiatus,
-  publishingFinished,
-}
-
 class HelperUtils {
   static String convertJSONToQueryString(Map<String, dynamic> json) {
     List<String> queryParams = [];

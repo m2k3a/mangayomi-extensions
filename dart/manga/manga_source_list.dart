@@ -5,6 +5,7 @@ import 'multisrc/mangareader/sources.dart';
 import 'multisrc/mmrcms/sources.dart';
 import 'multisrc/nepnep/sources.dart';
 import 'src/en/Atsumaru/source.dart';
+import 'src/en/allanime/source.dart';
 import 'src/en/mangahere/source.dart';
 import 'src/en/mangapark/source.dart';
 
@@ -17,4 +18,5 @@ List<Source> dartMangasourceList = [
   ...nepnepSourcesList,
   ...mangaboxSourcesList,
   atsumaruSource,
+  allanimeSource,
 ];

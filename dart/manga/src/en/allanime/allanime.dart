@@ -321,7 +321,7 @@ class AllManga extends MProvider {
       chapter.url = Urls.buildMangaURL("$mangaId/chapter-${episodeIdStr}-sub");
       chapters.add(chapter);
     }
-    manga.chapters = chapters;
+    manga.chapters = chapters.reversed.toList();
     return manga;
   }
 

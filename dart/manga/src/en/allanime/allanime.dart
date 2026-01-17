@@ -302,7 +302,7 @@ class AllManga extends MProvider {
     );
     final chaptersJson = jsonDecode(res.body);
     final chaptersData = chaptersJson["data"]["episodeInfos"];
-    chaptersData.sort((a, b) => a["episodeIdNum"].compareTo(b["episodeIdNum"]));
+    chaptersData.sort((b, a) => a["episodeIdNum"].compareTo(b["episodeIdNum"]));
     List<MChapter> chapters = [];
     for (var chapterData in chaptersData) {
       MChapter chapter = MChapter();
@@ -321,7 +321,7 @@ class AllManga extends MProvider {
       chapter.url = Urls.buildMangaURL("$mangaId/chapter-${episodeIdStr}-sub");
       chapters.add(chapter);
     }
-    manga.chapters = chapters.reversed.toList();
+    manga.chapters = chapters;
     return manga;
   }
 

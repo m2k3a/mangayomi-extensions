@@ -7,11 +7,15 @@ class Atsumaru extends MProvider {
   MSource source;
 
   final Client client = Client(source);
-  
-  @override
-  Future<MPages> getMangaItems(int page, final method, String searchString, filters) async {
-    List<MPages> mangaList = [];
 
+  @override
+  Future<MPages> getMangaItems(
+    int page,
+    final method,
+    String searchString,
+    filters,
+  ) async {
+    List<MPages> mangaList = [];
     final body = {
       "filter": {
         "search": filters["search"] ?? searchString,
@@ -28,14 +32,13 @@ class Atsumaru extends MProvider {
       },
       "page": page,
     };
-    print(body);
     final res = await client.post(
       Uri.parse("${source.apiUrl}/explore/filteredView"),
       headers: {
         "Accept": "*/*",
         "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5",
         "content-type": "application/json",
-        "referer": "https://atsu.moe/"
+        "referer": "https://atsu.moe/",
       },
       body: json.encode(body),
     );
@@ -50,20 +53,20 @@ class Atsumaru extends MProvider {
       manga.link = item["id"];
       mangaList.add(manga);
     }
-    body["page"] = page+1;
+    body["page"] = page + 1;
     final hasNextReq = await client.post(
       Uri.parse("${source.apiUrl}/explore/filteredView"),
       headers: {
         "Accept": "*/*",
         "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5",
         "content-type": "application/json",
-        "referer": "https://atsu.moe/"
+        "referer": "https://atsu.moe/",
       },
       body: json.encode(body),
     );
-    
+
     final hasNext = json.decode(hasNextReq.body)["items"].isEmpty;
-    
+
     return MPages(mangaList, !hasNext);
   }
 
@@ -77,7 +80,7 @@ class Atsumaru extends MProvider {
     return getMangaItems(page, "released", "", {});
   }
 
-   @override
+  @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     final filters = filterList.filters;
 
@@ -95,8 +98,8 @@ class Atsumaru extends MProvider {
     };
 
     for (var filter in filters) {
-      if (filter.type  == "SeparatorFilter") continue;
-      
+      if (filter.type == "SeparatorFilter") continue;
+
       if (filter.type == "SearchFilter") {
         if (filter.state.isNotEmpty) {
           selectedFilters["search"] = filter.state.toString();
@@ -143,109 +146,123 @@ class Atsumaru extends MProvider {
         selectedFilters["officialTranslation"] = filter.state;
       }
     }
-    
+
     if (query.isNotEmpty) {
       selectedFilters["search"] = query;
     }
 
-    return getMangaItems(page-1, selectedFilters["sortBy"], query, selectedFilters);
+    return getMangaItems(
+      page - 1,
+      selectedFilters["sortBy"],
+      query,
+      selectedFilters,
+    );
   }
 
   @override
   Future<MManga> getDetail(String id) async {
-  final statusList = [{
-    "Pending": 0,
-    "Ongoing": 0,
-    "Completed": 1,
-    "Hiatus": 2,
-    "Cancelled": 3,
-    "Unknown": 5,
-  }];
+    final statusList = [
+      {
+        "Pending": 0,
+        "Ongoing": 0,
+        "Completed": 1,
+        "Hiatus": 2,
+        "Cancelled": 3,
+        "Unknown": 5,
+      },
+    ];
 
-  final res = await client.get(Uri.parse("${source.baseUrl}/manga/$id"), 
-  headers: {
-    "Accept": "*/*",
-    "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
-    "referer": "https://atsu.moe/"
-  });
-  final doc = parseHtml(res.body);
-  
-  final contentJson = doc.select("head > script")[1].text;
-  final json =  json.decode(contentJson.replaceAll("window.mangaPage = ", "").replaceAll(";", ""))["mangaPage"];  
-  
-  final name = json["title"];
-  final imageUrl = json["poster"]["image"];
-  final description = json["synopsis"];
-  final status = json["status"];
-  final authors = json["authors"].map((author) => author["name"]);
-  final genres = json["tags"].map((tag) => tag["name"]);
-  final chapters = await getChapters(id, 0);
-  
-  MManga manga = MManga();
-  
-  manga.name = name;
-  manga.link = id;
-  manga.imageUrl = "${source.baseUrl}/static/$imageUrl";
-  manga.genre = "$genres".replaceAll(RegExp(r'[()]'), '').split(", ");
-  manga.author = "$authors".replaceAll(RegExp(r'[()]'), '');
-  manga.chapters = chapters;
-  manga.description = description;
-  manga.status = parseStatus("pending", statusList);
+    final res = await client.get(
+      Uri.parse("${source.baseUrl}/manga/$id"),
+      headers: {
+        "Accept": "*/*",
+        "accept-language":
+            "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
+        "referer": "https://atsu.moe/",
+      },
+    );
+    final doc = parseHtml(res.body);
 
-  return manga;
+    final contentJson = doc.select("head > script")[1].text;
+    final json = json.decode(
+      contentJson.replaceAll("window.mangaPage = ", "").replaceAll(";", ""),
+    )["mangaPage"];
+
+    final name = json["title"];
+    final imageUrl = json["poster"]["image"];
+    final description = json["synopsis"];
+    final status = json["status"];
+    final authors = json["authors"].map((author) => author["name"]);
+    final genres = json["tags"].map((tag) => tag["name"]);
+    final chapters = await getChapters(id, 0);
+
+    MManga manga = MManga();
+
+    manga.name = name;
+    manga.link = id;
+    manga.imageUrl = "${source.baseUrl}/static/$imageUrl";
+    manga.genre = "$genres".replaceAll(RegExp(r'[()]'), '').split(", ");
+    manga.author = "$authors".replaceAll(RegExp(r'[()]'), '');
+    manga.chapters = chapters;
+    manga.description = description;
+    manga.status = parseStatus("pending", statusList);
+
+    return manga;
   }
 
   Future<List<MChapter>> getChapters(String id, int page) async {
-  List<MChapter> chapters = [];
-  final currentPage = page;
+    List<MChapter> chapters = [];
+    final currentPage = page;
 
-  final res = await client.get(
-    Uri.parse("${source.apiUrl}/manga/chapters?id=$id&filter=all&sort=desc&page=$currentPage"),
-    headers: {
-      "Accept": "*/*",
-      "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
-      "referer": "https://atsu.moe/"
-    },
-  );
+    final res = await client.get(
+      Uri.parse(
+        "${source.apiUrl}/manga/chapters?id=$id&filter=all&sort=desc&page=$currentPage",
+      ),
+      headers: {
+        "Accept": "*/*",
+        "accept-language":
+            "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
+        "referer": "https://atsu.moe/",
+      },
+    );
 
-  final jsonData = json.decode(res.body);
+    final jsonData = json.decode(res.body);
 
-  final maxPageCount = jsonData["pages"] ?? 1;
-  final chaps = jsonData["chapters"] ?? [];
+    final maxPageCount = jsonData["pages"] ?? 1;
+    final chaps = jsonData["chapters"] ?? [];
 
-  for (final chap in chaps) {
-    final chapter = MChapter()
-      ..name = chap["title"]
-      ..url = "$id&chapterId=${chap["id"]}"
-      ..dateUpload = "${isoToUnix(chap["createdAt"])}"
-      ..scanlator = "${chap['pageCount']} Pages";
+    for (final chap in chaps) {
+      final chapter = MChapter()
+        ..name = chap["title"]
+        ..url = "$id&chapterId=${chap["id"]}"
+        ..dateUpload = "${isoToUnix(chap["createdAt"])}"
+        ..scanlator = "${chap['pageCount']} Pages";
 
-    chapters.add(chapter);
-  }
+      chapters.add(chapter);
+    }
 
-  if (chaps.isEmpty || currentPage >= maxPageCount) {
+    if (chaps.isEmpty || currentPage >= maxPageCount) {
+      return chapters;
+    }
+
+    final nextPageChapters = await getChapters(id, currentPage + 1);
+    chapters.addAll(nextPageChapters);
+
     return chapters;
   }
-
-  final nextPageChapters = await getChapters(id, currentPage + 1);
-  chapters.addAll(nextPageChapters);
-
-  return chapters;
-}
-
 
   @override
   Future<List<Map<String, dynamic>>> getPageList(String url) async {
     List<Map<String, dynamic>> images = [];
-    final res = await client.get(Uri.parse("${source.apiUrl}/read/chapter?mangaId=$url"));
+    final res = await client.get(
+      Uri.parse("${source.apiUrl}/read/chapter?mangaId=$url"),
+    );
     final json = json.decode(res.body);
 
     final imageObjects = json["readChapter"]["pages"];
 
     for (final imageObject in imageObjects) {
-      images.add({
-        "url": "${source.baseUrl}${imageObject["image"]}"
-      });
+      images.add({"url": "${source.baseUrl}${imageObject["image"]}"});
     }
     return images;
   }
@@ -254,7 +271,6 @@ class Atsumaru extends MProvider {
     final dateTime = DateTime.parse(isoString);
     return dateTime.toUtc().millisecondsSinceEpoch;
   }
-
 
   @override
   List<dynamic> getFilterList() {
@@ -382,7 +398,7 @@ class Atsumaru extends MProvider {
         CheckBoxFilter("1971", "1971"),
         CheckBoxFilter("1970", "1970"),
       ]),
-       CheckBoxFilter("Only show official tanslations", "TranslationsFilter"),
+      CheckBoxFilter("Only show official tanslations", "TranslationsFilter"),
     ];
   }
 
@@ -395,16 +411,16 @@ class Atsumaru extends MProvider {
         summary: "",
         valueIndex: 0,
         entries: ["False", "True"],
-        entryValues: [0, 1],
+        entryValues: ["0", "1"],
       ),
     ];
   }
 
   bool preferenceNsfwContent() {
-    return getPreferenceValue(source.id, "NsfwFilter") == "2";
-  } 
+    return getPreferenceValue(source.id, "NsfwFilter") == "1";
+  }
 }
 
 Atsumaru main(MSource source) {
-  return Atsumaru(source:source);
+  return Atsumaru(source: source);
 }

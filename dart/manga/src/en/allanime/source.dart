@@ -1,7 +1,7 @@
 import '../../../../../model/source.dart';
 
 Source get allanimeSource => _allanimeSource;
-const _allanimeVersion = "0.1.1";
+const _allanimeVersion = "0.1.2";
 const _allanimeSourceCodeUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/manga/src/en/allanime/allanime.dart";
 const _allanimeIconUrl =

@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "iconUrl": "https://www.google.com/s2/favicons?sz=256&domain=https://olympustaff.com",
     "typeSource": "single",
     "itemType": 0,
-    "version": "0.0.3",
+    "version": "0.1.0",
     "isNsfw": false,
     "pkgPath": "manga/src/ar/teamx.js"
 }];
@@ -35,10 +35,6 @@ class DefaultExtension extends MProvider {
     );
   }
 
-  parseChapterDate(date) {
-    return new Date(date).getTime().toString();
-  }
-
   getBaseUrl() {
     const preference = new SharedPreferences();
     var base_url = preference.get("domain_url");
@@ -51,12 +47,26 @@ class DefaultExtension extends MProvider {
     return base_url;
   }
 
+  getHeaders(url) {
+    url = url || this.getBaseUrl();
+    return {
+      Referer: `${url}/`,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    };
+  }
+
   async request(slug, useBaseUrl = true) {
     const url = useBaseUrl ? `${this.getBaseUrl()}${slug}` : slug;
     if (!this.client) {
       this.client = new Client();
     }
-    const res = await this.client.get(url);
+    let res = await this.client.get(url, { headers: this.getHeaders(url) });
+    if (res && (res.statusCode === 503 || (res.body && res.body.indexOf('cf-browser-verification') !== -1) || (res.headers && res.headers['server'] && res.headers['server'].toLowerCase().includes('cloudflare')))) {
+      const extraHeaders = Object.assign({}, this.getHeaders(url), { "Upgrade-Insecure-Requests": "1" });
+      res = await this.client.get(url, { headers: extraHeaders });
+    }
     return new Document(res.body);
   }
 
@@ -97,39 +107,30 @@ class DefaultExtension extends MProvider {
         `series?page=${page}&genre=${genre}&type=${type}&status=${status}`,
       );
     }
-
+    // /html/body/a[1]
+    // body > a:nth-child(1)
     const doc = await this.request(`/ajax/search?keyword=${query}`);
-    const list = doc.select("li.list-group-item").map((element) => ({
-      name: element.selectFirst("div.ms-2 a")?.text,
-      imageUrl: element.selectFirst("a img")?.getSrc,
-      link: element.selectFirst("div.ms-2 a")?.getHref,
+    const list = doc.select("a").map((element) => ({
+      name: element.selectFirst("h4")?.text.trim(),
+      imageUrl: element.selectFirst("div img")?.getSrc,
+      link: element?.getHref,
     }));
 
     return { list, hasNextPage: false };
   }
 
   //  Chapters
-  chapterFromElement(element) {
-    const chpNum = element.selectFirst("div.epl-num")?.text.trim();
-    const chpTitle = element.selectFirst("div.epl-title")?.text.trim();
-
-    let name;
-    if (chpTitle?.includes(chpNum?.replace(/[^0-9]/g, ""))) {
-      name = chpTitle;
-    } else if (!chpNum) {
-      name = chpTitle;
-    } else if (!chpTitle) {
-      name = chpNum;
-    } else {
-      name = `${chpNum} - ${chpTitle}`;
-    }
-
+  chapterFromElement(element, mangaUrl, chapterNumber) {
+    // #chaptersContainer > div:nth-child(1) > a > div.chapter-info > div.chapter-number
+    const chpNum = element.selectFirst("div.chapter-info > div.chapter-number")?.text.trim();
+    const chpTitle = element.selectFirst("div.chapter-info > div.chapter-title")?.text.trim();
+    const date = element? element.attr("data-date") + "000" : "0";
+    console.log(date);
     return {
-      name,
-      dateUpload: this.parseChapterDate(
-        element.selectFirst("div.epl-date")?.text.trim(),
-      ),
-      url: element.getHref,
+      name: chpNum || `الفصل ${chapterNumber}`,
+      description: chpTitle || "",
+      dateUpload: date,
+      url: element.selectFirst("a").getHref || `${mangaUrl}/${chapterNumber}`,
     };
   }
 
@@ -159,25 +160,33 @@ class DefaultExtension extends MProvider {
       .select("div.review-author-info a")
       .map((e) => e.text.trim());
 
-    const allElements = [];
-    for (;;) {
-      const pageChapters = doc.select("div.eplister ul a");
-      if (!pageChapters || pageChapters.length === 0) break;
-      allElements.push(...pageChapters);
 
-      const nextPage = doc.select("a[rel=next]");
-      if (!nextPage || nextPage.length === 0) break;
 
-      const nextUrl = nextPage[0].attr("href");
-      if (!nextUrl) break;
-
-      doc = await this.request(nextUrl, false);
+    var lastChapter = doc.selectFirst("#chapter-contact > div.lastend > div:nth-child(2) > a > span.epcur.epcurlast").text.trim().split(" ")[1];
+    if (isNaN(lastChapter)) {
+      lastChapter = "0";
     }
+    var firstChapter = doc.selectFirst("#chapter-contact > div.lastend > div:nth-child(1) > a > span.epcur.epcurfirst").text.trim().split(" ")[1];
+    if (isNaN(firstChapter)) {
+      firstChapter = "0";
+    }
+    lastChapter = parseInt(lastChapter);
+    firstChapter = parseInt(firstChapter);
 
-    const chapters = allElements.map((element) =>
-      this.chapterFromElement(element),
+    let i = lastChapter;
+    const chapters = [];
+    // this parses from high to low 
+    const last100Chapters = doc.select("#chaptersContainer > div").map((e) =>
+      this.chapterFromElement(e, url, i--),
     );
-
+    chapters.push(...last100Chapters);
+    for (; i >= firstChapter; i--) {
+      chapters.push({
+        name: `الفصل ${i}`,
+        url: `${url}/${i}`,
+        dateUpload: "0",
+      });
+    }
     return {
       title,
       imageUrl,
@@ -193,8 +202,11 @@ class DefaultExtension extends MProvider {
   async getPageList(url) {
     const doc = await this.request(url, false);
 
+    // NOTE: even tho urls are correct
+    // the images do not load in the reader directly due to cloudflare issue
     return doc.select("div.image_list img[src]").map((x) => ({
       url: x.attr("src"),
+      headers: this.getHeaders(url),
     }));
   }
 

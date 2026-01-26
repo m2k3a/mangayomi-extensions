@@ -125,7 +125,6 @@ class DefaultExtension extends MProvider {
     const chpNum = element.selectFirst("div.chapter-info > div.chapter-number")?.text.trim();
     const chpTitle = element.selectFirst("div.chapter-info > div.chapter-title")?.text.trim();
     const date = element? element.attr("data-date") + "000" : "0";
-    console.log(date);
     return {
       name: chpNum || `الفصل ${chapterNumber}`,
       description: chpTitle || "",

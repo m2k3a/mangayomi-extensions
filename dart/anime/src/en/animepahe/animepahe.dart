@@ -115,7 +115,9 @@ class AnimePahe extends MProvider {
     final jsonResult = json.decode(res);
     final page = jsonResult["current_page"];
     final hasNextPage = page < jsonResult["last_page"];
-    List<MManga> animeList = [];
+
+    List<MChapter> animeList = [];
+
     for (var item in jsonResult["data"]) {
       MChapter episode = MChapter();
       episode.name = "Episode ${item["episode"]}";
@@ -133,7 +135,9 @@ class AnimePahe extends MProvider {
         Uri.parse(newUrl),
         headers: headers,
       )).body;
-      animeList.addAll(await recursivePages(newUrl, newRes, session));
+
+      final nextPages = await recursivePages(newUrl, newRes, session);
+      animeList.addAll(nextPages);
     }
     return animeList;
   }

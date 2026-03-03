@@ -318,37 +318,27 @@ class AllManga extends MProvider {
   @override
   Future<MPages> getPopular(int page) async {
     List<MManga> mangaList = [];
-    final apiQuery = HelperUtils.convertJSONToQueryString({
-      "variables": {
-        "type": "manga",
-        "size": 20,
-        "dateRange": 0,
-        "page": page,
-        "allowAdult": false,
-        "allowUnknown": false,
-      },
-      "extensions": {
-        "persistedQuery": {
-          "version": 1,
-          "sha256Hash":
-              "1fc9651b0d4c3b9dfd2fa6e1d50b8f4d11ce37f988c23b8ee20f82159f7c1147",
-        },
-      },
-    });
-    final res = await client.get(
-      Uri.parse("${source.apiUrl}/api?${apiQuery}"),
-      headers: this.headers,
+    final res = await client.post(
+      Uri.parse(Urls.apiUrl),
+      headers: this.postHeaders,
+      body: jsonEncode(Queries.buildPopularMangaQuery(page: page)),
     );
-    final json = jsonDecode(res.body);
-    final data = json["data"]["queryPopular"];
-    final items = data["recommendations"];
+    final items = jsonDecode(
+      res.body,
+    )?["data"]?["queryPopular"]?["recommendations"];
+    if (items == null || items is! List) return MPages([], false, list: []);
     for (var item in items) {
       final mangaData = item["anyCard"];
-      MManga manga = MManga();
-      manga.name = MangaUtils.getMangaName(mangaData);
-      manga.imageUrl = Urls.buildImgUrl(mangaData["thumbnail"].toString());
-      manga.link = Urls.buildMangaURL(mangaData["_id"].toString());
-      mangaList.add(manga);
+      final thumbnail = mangaData?["thumbnail"];
+      final id = mangaData?["_id"];
+      if (thumbnail == null || id == null) continue;
+      mangaList.add(
+        MManga(
+          name: MangaUtils.getMangaName(mangaData),
+          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
+          link: Urls.buildMangaURL(id.toString()),
+        ),
+      );
     }
     return MPages(mangaList, true, list: []);
   }
@@ -356,36 +346,24 @@ class AllManga extends MProvider {
   @override
   Future<MPages> getLatestUpdates(int page) async {
     List<MManga> mangaList = [];
-    final apiQuery = HelperUtils.convertJSONToQueryString({
-      "variables": {
-        "search": {"isManga": true},
-        "limit": 26,
-        "page": page,
-        "translationType": "sub",
-        "countryOrigin": "ALL",
-      },
-      "extensions": {
-        "persistedQuery": {
-          "version": 1,
-          "sha256Hash":
-              "3a4b7e9ef62953484a05dd40f35b35b118ad2ff3d5e72d2add79bcaa663271e7",
-        },
-      },
-    });
-    final res = await client.get(
-      Uri.parse("${source.apiUrl}/api?${apiQuery}"),
-      headers: this.headers,
+    final res = await client.post(
+      Uri.parse(Urls.apiUrl),
+      headers: this.postHeaders,
+      body: jsonEncode(Queries.buildSearchQuery(page: page)),
     );
-    final json = jsonDecode(res.body);
-    final data = json["data"]["mangas"];
-    final items = data["edges"];
-    for (var item in items) {
-      final mangaData = item;
-      MManga manga = MManga();
-      manga.name = MangaUtils.getMangaName(mangaData);
-      manga.imageUrl = Urls.buildImgUrl(mangaData["thumbnail"].toString());
-      manga.link = Urls.buildMangaURL(mangaData["_id"].toString());
-      mangaList.add(manga);
+    final items = jsonDecode(res.body)?["data"]?["mangas"]?["edges"];
+    if (items == null || items is! List) return MPages([], false, list: []);
+    for (var mangaData in items) {
+      final thumbnail = mangaData["thumbnail"];
+      final id = mangaData["_id"];
+      if (thumbnail == null || id == null) continue;
+      mangaList.add(
+        MManga(
+          name: MangaUtils.getMangaName(mangaData),
+          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
+          link: Urls.buildMangaURL(id.toString()),
+        ),
+      );
     }
     return MPages(mangaList, true, list: []);
   }
@@ -393,35 +371,26 @@ class AllManga extends MProvider {
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     List<MManga> mangaList = [];
-    final apiQuery = HelperUtils.convertJSONToQueryString({
-      "variables": {
-        "search": {"isManga": true, "query": query},
-        "limit": 26,
-        "page": page,
-        "translationType": "sub",
-        "countryOrigin": "ALL",
-      },
-      "extensions": {
-        "persistedQuery": {
-          "version": 1,
-          "sha256Hash":
-              "3a4b7e9ef62953484a05dd40f35b35b118ad2ff3d5e72d2add79bcaa663271e7",
-        },
-      },
-    });
-    final res = await client.get(
-      Uri.parse("${source.apiUrl}/api?${apiQuery}"),
-      headers: this.headers,
+    final res = await client.post(
+      Uri.parse(Urls.apiUrl),
+      headers: this.postHeaders,
+      body: jsonEncode(
+        Queries.buildSearchQuery(page: page, query: query.trim()),
+      ),
     );
-    final json = jsonDecode(res.body);
-    final items = json["data"]["mangas"]["edges"];
-    for (var item in items) {
-      final mangaData = item;
-      MManga manga = MManga();
-      manga.name = MangaUtils.getMangaName(mangaData);
-      manga.imageUrl = Urls.buildImgUrl(mangaData["thumbnail"].toString());
-      manga.link = Urls.buildMangaURL(mangaData["_id"].toString());
-      mangaList.add(manga);
+    final items = jsonDecode(res.body)?["data"]?["mangas"]?["edges"];
+    if (items == null || items is! List) return MPages([], false, list: []);
+    for (var mangaData in items) {
+      final thumbnail = mangaData?["thumbnail"];
+      final id = mangaData?["_id"];
+      if (thumbnail == null || id == null) continue;
+      mangaList.add(
+        MManga(
+          name: MangaUtils.getMangaName(mangaData),
+          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
+          link: Urls.buildMangaURL(id.toString()),
+        ),
+      );
     }
     return MPages(mangaList, true, list: []);
   }
@@ -429,88 +398,59 @@ class AllManga extends MProvider {
   @override
   Future<MManga> getDetail(String url) async {
     final String mangaId = url.split("/").last;
-    final mangaDetailsQuery = HelperUtils.convertJSONToQueryString({
-      "variables": {
-        "_id": "$mangaId",
-        "search": {"allowAdult": false, "allowUnknown": false},
-      },
-      "extensions": {
-        "persistedQuery": {
-          "version": 1,
-          "sha256Hash":
-              "90024aeae9c1a4d3ace0473871dd1902e47fbcb8781ccbcd8ad81f8bb1f313ee",
-        },
-      },
-    });
-    dynamic res = await client.get(
-      Uri.parse("${source.apiUrl}/api?${mangaDetailsQuery}"),
-      headers: this.headers,
+    // Details
+    final resDetail = await client.post(
+      Uri.parse(Urls.apiUrl),
+      headers: this.postHeaders,
+      body: jsonEncode(Queries.buildDetailsQuery(mangaId)),
     );
-    final json = jsonDecode(res.body);
-    final data = json["data"]["manga"];
-    MManga manga = MManga();
-    manga.author = MangaUtils.getAuthor(data);
-    manga.artist = manga.author;
-    manga.genre = MangaUtils.combineGenres(
-      data["genres"] ?? [],
-      data["tags"] ?? [],
+    final detailsData = jsonDecode(resDetail.body)?["data"]?["manga"];
+    print(detailsData); // DEBUG : REMOVE THIS
+    if (detailsData == null) throw Exception("Manga details not found");
+    // Chapters
+    final resChapters = await client.post(
+      Uri.parse(Urls.apiUrl),
+      headers: this.postHeaders,
+      body: jsonEncode(Queries.buildChaptersQuery(id: mangaId)),
     );
-    manga.imageUrl = Urls.buildImgUrl(data["thumbnail"].toString());
-    manga.link = Urls.buildMangaURL(data["_id"].toString());
-    manga.name = MangaUtils.getMangaName(data);
-    manga.status = MangaUtils.getStatus(data['status']);
-    manga.description = MangaUtils.buildDescription(
-      data["description"],
-      data["altNames"],
-    );
-
-    // Prepare to fetch all chapters
-    final int end =
-        double.tryParse(
-          data["lastChapterInfo"]["sub"]["chapterString"],
-        )?.ceil() ??
-        9999;
-    final String mangaChaptersQuery = HelperUtils.convertJSONToQueryString({
-      "variables": {
-        "showId": "manga@$mangaId",
-        "episodeNumStart": 0,
-        "episodeNumEnd": end,
-      },
-      "extensions": {
-        "persistedQuery": {
-          "version": 1,
-          "sha256Hash":
-              "ae7b2ed82ce3bf6fe9af426372174468958a066694167e6800bfcb3fcbdbb460",
-        },
-      },
-    });
-    res = await client.get(
-      Uri.parse("${source.apiUrl}/api?${mangaChaptersQuery}"),
-      headers: this.headers,
-    );
-    final chaptersJson = jsonDecode(res.body);
-    final chaptersData = chaptersJson["data"]["episodeInfos"];
+    final chaptersData = jsonDecode(resChapters.body)?["data"]?["episodeInfos"];
+    if (chaptersData == null || chaptersData is! List)
+      throw Exception("Chapters not found");
     chaptersData.sort((b, a) => a["episodeIdNum"].compareTo(b["episodeIdNum"]));
     List<MChapter> chapters = [];
-    for (var chapterData in chaptersData) {
-      MChapter chapter = MChapter();
-      final chapterTitle = chapterData["notes"] ?? "";
-      final String episodeIdStr = chapterData["episodeIdNum"].toString();
-      chapter.name = "Chapter ${episodeIdStr}";
-      String strDate = chapterData["uploadDates"]["sub"].toString();
-      List<dynamic> dates = parseDates(
-        [strDate],
-        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-        "en_US",
+    for (var cur in chaptersData) {
+      if (cur == null) continue;
+      String? stime = cur["uploadDates"]?["sub"]?.toString().trim();
+      String episodeNumber = cur["episodeIdNum"]?.toString() ?? "Unknown";
+      List<dynamic> dates = [];
+      if (stime != null)
+        dates = parseDates([stime], "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", "en_US");
+      chapters.add(
+        MChapter(
+          name: "Chapter $episodeNumber",
+          dateUpload: dates.isNotEmpty ? dates.first : null,
+          description: cur["notes"],
+          url: Urls.buildMangaURL("$mangaId/chapter-$episodeNumber-sub"),
+        ),
       );
-      chapter.dateUpload = dates.isNotEmpty ? dates.first : null;
-      chapter.thumbnailUrl = null;
-      chapter.description = chapterTitle;
-      chapter.url = Urls.buildMangaURL("$mangaId/chapter-${episodeIdStr}-sub");
-      chapters.add(chapter);
     }
-    manga.chapters = chapters;
-    return manga;
+    return MManga(
+      author: MangaUtils.getAuthor(detailsData),
+      artist: MangaUtils.getAuthor(detailsData),
+      genre: MangaUtils.combineGenres(
+        detailsData["genres"] ?? [],
+        detailsData["tags"] ?? [],
+      ),
+      imageUrl: Urls.buildImgUrl(detailsData["thumbnail"] ?? ""),
+      link: Urls.buildMangaURL(mangaId),
+      name: MangaUtils.getMangaName(detailsData),
+      status: MangaUtils.getStatus(detailsData['status']),
+      description: MangaUtils.buildDescription(
+        detailsData["description"],
+        detailsData["altNames"],
+      ),
+      chapters: chapters,
+    );
   }
 
   // For novel html content
@@ -541,35 +481,19 @@ class AllManga extends MProvider {
     final chapterNum = chapter[1];
     final chapterType = chapter.last;
     final res = await client.post(
-      Uri.parse("${source.apiUrl}/api"),
+      Uri.parse(Urls.apiUrl),
       headers: this.postHeaders,
-      body: jsonEncode({
-        "query": """
-          query (
-            \$id: String!
-            \$translationType: VaildTranslationTypeMangaEnumType!
-            \$chapterNum: String!
-          ) {
-            chapterPages(
-              mangaId: \$id
-              translationType: \$translationType
-              chapterString: \$chapterNum
-            ) {
-              edges {
-                pictureUrls
-                pictureUrlHead
-              }
-            }
-          }
-        """,
-        "variables": {
-          "id": "$mangaId",
-          "translationType": chapterType == "sub" ? "sub" : "dub",
-          "chapterNum": "$chapterNum",
-        },
-      }),
+      body: jsonEncode(
+        Queries.buildPageQuery(
+          id: mangaId,
+          chapterNum: chapterNum,
+          translationType: chapterType == "sub" ? "sub" : "dub",
+        ),
+      ),
     );
     final json = jsonDecode(res.body);
+    print(bobobo); // DEBUG : REMOVE THIS
+    print(json); // DEBUG : REMOVE THIS
     final pagesData = json["data"]["chapterPages"]["edges"]?.first;
     final baseUrl = pagesData["pictureUrlHead"];
     List<String> pageUrls = [];

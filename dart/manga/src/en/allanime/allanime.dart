@@ -197,17 +197,6 @@ class Queries {
 }
 
 class HelperUtils {
-  static String convertJSONToQueryString(Map<String, dynamic> json) {
-    List<String> queryParams = [];
-    json.forEach((key, value) {
-      String encodedValue = (value is Map || value is List)
-          ? Uri.encodeComponent(jsonEncode(value))
-          : Uri.encodeComponent(value.toString());
-      queryParams.add('${Uri.encodeComponent(key)}=$encodedValue');
-    });
-    return queryParams.join('&');
-  }
-
   static String parseUserAgent(String? userAgent) {
     if (userAgent == null || userAgent.isEmpty)
       return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
@@ -217,11 +206,13 @@ class HelperUtils {
 
 class MangaUtils {
   static String getMangaName(Map<String, String> mangaData) {
-    return (mangaData["englishName"] ??
-            mangaData["name"] ??
-            mangaData["nativeName"] ??
-            "No Title")
-        .toString();
+    String? englishName = mangaData["englishName"];
+    String? name = mangaData["name"];
+    String? nativeName = mangaData["nativeName"];
+    if (englishName != null) return englishName;
+    if (name != null) return name;
+    if (nativeName != null) return nativeName;
+    return "No Title";
   }
 
   // Parse status from string to enum index
@@ -256,14 +247,16 @@ class MangaUtils {
   }
 
   static String buildDescription(String? desc, List<String>? altNames) {
-    final temp = desc;
-    if (desc != null) desc = parseHtml(desc.replaceAll(r"<br>", "br2n")).text;
-    if (desc == null)
-      desc = (temp?.replaceAll(r"<br>", "br2n")) ?? "No Description";
-    return desc.replaceAll(r'br2n', '\n') +
-        ((altNames != null && altNames.isNotEmpty)
-            ? "\n\nAlternative Names: \n${altNames.join('\n')}"
-            : "");
+    desc =
+        desc?.replaceAll(
+          RegExp(r"<(\/*?)(?!(em|p|br\s*\/|strong))\w+?.+?>"),
+          "",
+        ) ??
+        "No Description";
+    desc += (altNames != null && altNames.isNotEmpty)
+        ? "\n\nAlternative Names: \n${altNames.join('\n')}"
+        : "";
+    return desc.trim();
   }
 
   static List<String> combineGenres(List<String> genres, List<String> tags) {
@@ -282,7 +275,7 @@ class Urls {
   static const String baseImgUrl =
       'https://wp.youtube-anime.com/aln.youtube-anime.com';
   static const String baseUrl = 'https://allmanga.to';
-  static const String apiUrl = 'https://api.allanime.day';
+  static const String apiUrl = 'https://api.allanime.day/api';
 
   /// Returns absolute image URL
   static String buildImgUrl(String url) {

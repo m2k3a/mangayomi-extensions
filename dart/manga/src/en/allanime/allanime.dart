@@ -4,20 +4,20 @@ import 'dart:convert';
 class Queries {
   static const String popularMangaQuery = """
     query (
-        \%type: VaildPopularTypeEnumType!
-        \%size: Int!
-        \%page: Int
-        \%dateRange: Int
-        \%allowAdult: Boolean
-        \%allowUnknown: Boolean
+        \$type: VaildPopularTypeEnumType!
+        \$size: Int!
+        \$page: Int
+        \$dateRange: Int
+        \$allowAdult: Boolean
+        \$allowUnknown: Boolean
     ) {
         queryPopular(
-            type: \%type
-            size: \%size
-            dateRange: \%dateRange
-            page: \%page
-            allowAdult: \%allowAdult
-            allowUnknown: \%allowUnknown
+            type: \$type
+            size: \$size
+            dateRange: \$dateRange
+            page: \$page
+            allowAdult: \$allowAdult
+            allowUnknown: \$allowUnknown
         ) {
             recommendations {
                 anyCard {
@@ -32,18 +32,18 @@ class Queries {
   """;
   static const String searchQuery = """
     query (
-        \%search: SearchInput
-        \%size: Int
-        \%page: Int
-        \%translationType: VaildTranslationTypeMangaEnumType
-        \%countryOrigin: VaildCountryOriginEnumType
+        \$search: SearchInput
+        \$size: Int
+        \$page: Int
+        \$translationType: VaildTranslationTypeMangaEnumType
+        \$countryOrigin: VaildCountryOriginEnumType
     ) {
         mangas(
-            search: \%search
-            limit: \%size
-            page: \%page
-            translationType: \%translationType
-            countryOrigin: \%countryOrigin
+            search: \$search
+            limit: \$size
+            page: \$page
+            translationType: \$translationType
+            countryOrigin: \$countryOrigin
         ) {
             edges {
                 _id
@@ -56,14 +56,14 @@ class Queries {
   """;
   static const String pageQuery = """
     query (
-        \%id: String!
-        \%translationType: VaildTranslationTypeMangaEnumType!
-        \%chapterNum: String!
+        \$id: String!
+        \$translationType: VaildTranslationTypeMangaEnumType!
+        \$chapterNum: String!
     ) {
         chapterPages(
-            mangaId: \%id
-            translationType: \%translationType
-            chapterString: \%chapterNum
+            mangaId: \$id
+            translationType: \$translationType
+            chapterString: \$chapterNum
         ) {
             edges {
                 pictureUrls
@@ -73,8 +73,8 @@ class Queries {
     }
   """;
   static const String detailsQuery = """
-    query (\%id: String!) {
-        manga(_id: \%id) {
+    query (\$id: String!) {
+        manga(_id: \$id) {
             _id
             name
             thumbnail
@@ -89,11 +89,11 @@ class Queries {
     }
   """;
   static const String chaptersQuery = """
-    query (\%id: String!, \%chapterNumStart: Float!, \%chapterNumEnd: Float!) {
+    query (\$id: String!, \$chapterNumStart: Float!, \$chapterNumEnd: Float!) {
         episodeInfos(
-            showId: \%id
-            episodeNumStart: \%chapterNumStart
-            episodeNumEnd: \%chapterNumEnd
+            showId: \$id
+            episodeNumStart: \$chapterNumStart
+            episodeNumEnd: \$chapterNumEnd
         ) {
             episodeIdNum
             notes

@@ -1,6 +1,201 @@
 import 'package:mangayomi/bridge_lib.dart';
 import 'dart:convert';
 
+class Queries {
+  static const String popularMangaQuery = """
+    query (
+        \%type: VaildPopularTypeEnumType!
+        \%size: Int!
+        \%page: Int
+        \%dateRange: Int
+        \%allowAdult: Boolean
+        \%allowUnknown: Boolean
+    ) {
+        queryPopular(
+            type: \%type
+            size: \%size
+            dateRange: \%dateRange
+            page: \%page
+            allowAdult: \%allowAdult
+            allowUnknown: \%allowUnknown
+        ) {
+            recommendations {
+                anyCard {
+                    _id
+                    name
+                    thumbnail
+                    englishName
+                }
+            }
+        }
+    }
+  """;
+  static const String searchQuery = """
+    query (
+        \%search: SearchInput
+        \%size: Int
+        \%page: Int
+        \%translationType: VaildTranslationTypeMangaEnumType
+        \%countryOrigin: VaildCountryOriginEnumType
+    ) {
+        mangas(
+            search: \%search
+            limit: \%size
+            page: \%page
+            translationType: \%translationType
+            countryOrigin: \%countryOrigin
+        ) {
+            edges {
+                _id
+                name
+                thumbnail
+                englishName
+            }
+        }
+    }
+  """;
+  static const String pageQuery = """
+    query (
+        \%id: String!
+        \%translationType: VaildTranslationTypeMangaEnumType!
+        \%chapterNum: String!
+    ) {
+        chapterPages(
+            mangaId: \%id
+            translationType: \%translationType
+            chapterString: \%chapterNum
+        ) {
+            edges {
+                pictureUrls
+                pictureUrlHead
+            }
+        }
+    }
+  """;
+  static const String detailsQuery = """
+    query (\%id: String!) {
+        manga(_id: \%id) {
+            _id
+            name
+            thumbnail
+            description
+            authors
+            genres
+            tags
+            status
+            altNames
+            englishName
+        }
+    }
+  """;
+  static const String chaptersQuery = """
+    query (\%id: String!, \%chapterNumStart: Float!, \%chapterNumEnd: Float!) {
+        episodeInfos(
+            showId: \%id
+            episodeNumStart: \%chapterNumStart
+            episodeNumEnd: \%chapterNumEnd
+        ) {
+            episodeIdNum
+            notes
+            uploadDates
+        }
+    }
+""";
+
+  static Map<String, dynamic> buildPopularMangaQuery({
+    required int page,
+    int size = 20, // number of items per page
+    String type = "manga",
+    int dateRange = 0,
+    bool allowAdult = false,
+    bool allowUnknown = false,
+  }) {
+    return {
+      "query": popularMangaQuery,
+      "variables": {
+        "type": type,
+        "size": size,
+        "page": page,
+        "dateRange": dateRange,
+        "allowAdult": allowAdult,
+        "allowUnknown": allowUnknown,
+      },
+    };
+  }
+
+  static Map<String, dynamic> buildSearchQuery({
+    required int page,
+    int size = 20,
+    String? query, // search string
+    String? sortedBy, // "Name_ASC", "Name_DESC" or null (recently added)
+    List<String>? genres,
+    List<String>? excludeGenres,
+    bool isManga = true,
+    bool allowAdult = false,
+    bool allowUnknown = false,
+    String translationType = "sub", // "sub", "dub"
+    String countryOrigin = "ALL", // "JP", "KR", "CN", "ALL"
+  }) {
+    return {
+      "query": searchQuery,
+      "variables": {
+        "search": {
+          "query": query,
+          "sortedBy": sortedBy,
+          "genres": genres,
+          "excludeGenres": excludeGenres,
+          "isManga": isManga,
+          "allowAdult": allowAdult,
+          "allowUnknown  ": allowUnknown,
+        },
+        "size": size,
+        "page": page,
+        "translationType": translationType,
+        "countryOrigin": countryOrigin,
+      },
+    };
+  }
+
+  static Map<String, dynamic> buildPageQuery({
+    required String id,
+    required String chapterNum,
+    String translationType = "sub", // "sub" or "dub"
+  }) {
+    return {
+      "query": pageQuery,
+      "variables": {
+        "id": id,
+        "translationType": translationType,
+        "chapterNum": chapterNum,
+      },
+    };
+  }
+
+  static Map<String, dynamic> buildDetailsQuery(String id) {
+    return {
+      "query": detailsQuery,
+      "variables": {"id": id},
+    };
+  }
+
+  /// [chapterNumStart], [chapterNumEnd] are inclusive\
+  /// [id] is manga id without "manga@" prefix
+  static Map<String, dynamic> buildChaptersQuery({
+    required String id,
+    double chapterNumStart = 0.0,
+    double chapterNumEnd = 9999.0,
+  }) {
+    return {
+      "query": chaptersQuery,
+      "variables": {
+        "id": "manga@$id",
+        "chapterNumStart": chapterNumStart,
+        "chapterNumEnd": chapterNumEnd,
+      },
+    };
+  }
+}
+
 class HelperUtils {
   static String convertJSONToQueryString(Map<String, dynamic> json) {
     List<String> queryParams = [];

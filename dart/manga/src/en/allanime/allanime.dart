@@ -140,13 +140,13 @@ class Queries {
       "query": searchQuery,
       "variables": {
         "search": {
-          "query": query,
-          "sortedBy": sortedBy,
-          "genres": genres,
-          "excludeGenres": excludeGenres,
+          if (query != null) "query": query,
+          if (sortedBy != null) "sortedBy": sortedBy,
+          if (genres != null) "genres": genres,
+          if (excludeGenres != null) "excludeGenres": excludeGenres,
           "isManga": isManga,
           "allowAdult": allowAdult,
-          "allowUnknown  ": allowUnknown,
+          "allowUnknown": allowUnknown,
         },
         "size": size,
         "page": page,

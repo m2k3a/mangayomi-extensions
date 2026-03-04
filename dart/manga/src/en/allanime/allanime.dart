@@ -326,13 +326,13 @@ class AllManga extends MProvider {
   @override
   Map<String, String> get headers => {
     "Accept": "*/*",
-    "referer": "https://allmanga.to/",
+    "referer": "${URLS.BASE_URL}/",
     "user-agent": preferenceUserAgent(),
   };
 
   Map<String, String> get postHeaders => {
     "Accept": "*/*",
-    "referer": "https://allmanga.to/",
+    "referer": "${URLS.BASE_URL}/",
     "user-agent": preferenceUserAgent(),
     "content-type": "application/json",
   };
@@ -525,14 +525,7 @@ class AllManga extends MProvider {
       );
       pageUrls.add({
         "url": URLS.addHttp(pageImageUrl),
-        "headers": {
-          "user-agent": preferenceUserAgent(),
-          "accept":
-              "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-          "referer": "https://allmanga.to/",
-          "accept-encoding": "gzip, deflate, br",
-          "priority": "i",
-        },
+        "headers": this.headers,
       });
     }
     return pageUrls;

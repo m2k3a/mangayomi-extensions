@@ -266,32 +266,67 @@ class MangaUtils {
   }
 }
 
-class Urls {
-  static const String baseImgUrl =
+class URLS {
+  static const String MANGA_COVER_URL_HEAD =
       'https://wp.youtube-anime.com/aln.youtube-anime.com';
-  static const String baseUrl = 'https://allmanga.to';
-  static const String apiUrl = 'https://api.allanime.day/api';
+  static const String MANGA_PAGE_URL_HEAD = 'https://wp.youtube-anime.com';
+  static const String MANGA_PAGE_URL_HEAD_DEPRECATED =
+      'https://aln.youtube-anime.com'; // old url it redirects to new one
+  static const String MANGA_PAGE_URL_HEAD_REDIRECT =
+      'https://ytimgf.youtube-anime.com'; // the other base urls redirect to this one,
+  static const String BASE_URL = 'https://allmanga.to';
+  static const String API_URL = 'https://api.allanime.day/api';
 
-  /// Returns absolute image URL
-  static String buildImgUrl(String url) {
+  /// Returns absolute manga cover URL
+  static String buildMangaCoverUrl(String url) {
     if (url.startsWith('http')) {
       return url;
     } else {
-      return '$baseImgUrl/$url';
+      return '$MANGA_COVER_URL_HEAD/$url';
     }
+  }
+
+  static String stripHttp(String url) {
+    url = url.endsWith("/") ? url.substring(0, url.length - 1) : url;
+    return url.startsWith(RegExp(r"https?://")) ? url.split("://").last : url;
+  }
+
+  static String addHttp(String url) {
+    url = url.endsWith("/") ? url.substring(0, url.length - 1) : url;
+    return url.startsWith(RegExp(r"https?://")) ? url : "https://$url";
+  }
+
+  /// [mangaPageUrl] must be without stripped of http(s)
+  static String buildMangaPageUrl(
+    String pictureUrlHead,
+    String urlPath,
+    String imageQuality,
+  ) {
+    // ::
+    // for any quality that isnt 480
+    // the url redirects to new base_url
+    // which makes the Client change the referer to current full url
+    // which causes the request to fail with 403,
+    // so we have to redirect to the new base url ourselves for non 480 quality
+    // ::
+    if (imageQuality == "800")
+      return addHttp("${URLS.MANGA_PAGE_URL_HEAD_REDIRECT}/$urlPath?w=800");
+    if (imageQuality == "480")
+      return addHttp(
+        "${URLS.MANGA_PAGE_URL_HEAD}/${URLS.stripHttp(pictureUrlHead)}/$urlPath?w=480",
+      );
+    return addHttp("${URLS.MANGA_PAGE_URL_HEAD_REDIRECT}/$urlPath");
   }
 
   /// Returns absolute manga URL link
   static String buildMangaURL(String mangaId) {
-    return '$baseUrl/manga/$mangaId';
+    return '$BASE_URL/manga/$mangaId';
   }
 }
 
 class AllManga extends MProvider {
   AllManga({required this.source});
   MSource source;
-  @override
-  final String baseUrl = Urls.baseUrl;
   final Client client = Client();
   @override
   bool get supportsLatest => true;
@@ -314,7 +349,7 @@ class AllManga extends MProvider {
   Future<MPages> getPopular(int page) async {
     List<MManga> mangaList = [];
     final res = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(Queries.buildPopularMangaQuery(page: page)),
     );
@@ -330,8 +365,8 @@ class AllManga extends MProvider {
       mangaList.add(
         MManga(
           name: MangaUtils.getMangaName(mangaData),
-          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
-          link: Urls.buildMangaURL(id.toString()),
+          imageUrl: URLS.buildMangaCoverUrl(thumbnail.toString()),
+          link: URLS.buildMangaURL(id.toString()),
         ),
       );
     }
@@ -342,7 +377,7 @@ class AllManga extends MProvider {
   Future<MPages> getLatestUpdates(int page) async {
     List<MManga> mangaList = [];
     final res = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(Queries.buildSearchQuery(page: page)),
     );
@@ -355,8 +390,8 @@ class AllManga extends MProvider {
       mangaList.add(
         MManga(
           name: MangaUtils.getMangaName(mangaData),
-          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
-          link: Urls.buildMangaURL(id.toString()),
+          imageUrl: URLS.buildMangaCoverUrl(thumbnail.toString()),
+          link: URLS.buildMangaURL(id.toString()),
         ),
       );
     }
@@ -367,7 +402,7 @@ class AllManga extends MProvider {
   Future<MPages> search(String query, int page, FilterList filterList) async {
     List<MManga> mangaList = [];
     final res = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(
         Queries.buildSearchQuery(page: page, query: query.trim()),
@@ -382,8 +417,8 @@ class AllManga extends MProvider {
       mangaList.add(
         MManga(
           name: MangaUtils.getMangaName(mangaData),
-          imageUrl: Urls.buildImgUrl(thumbnail.toString()),
-          link: Urls.buildMangaURL(id.toString()),
+          imageUrl: URLS.buildMangaCoverUrl(thumbnail.toString()),
+          link: URLS.buildMangaURL(id.toString()),
         ),
       );
     }
@@ -395,16 +430,15 @@ class AllManga extends MProvider {
     final String mangaId = url.split("/").last;
     // Details
     final resDetail = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(Queries.buildDetailsQuery(mangaId)),
     );
     final detailsData = jsonDecode(resDetail.body)?["data"]?["manga"];
-    print(detailsData); // DEBUG : REMOVE THIS
     if (detailsData == null) throw Exception("Manga details not found");
     // Chapters
     final resChapters = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(Queries.buildChaptersQuery(id: mangaId)),
     );
@@ -425,7 +459,7 @@ class AllManga extends MProvider {
           name: "Chapter $episodeNumber",
           dateUpload: dates.isNotEmpty ? dates.first : null,
           description: cur["notes"],
-          url: Urls.buildMangaURL("$mangaId/chapter-$episodeNumber-sub"),
+          url: URLS.buildMangaURL("$mangaId/chapter-$episodeNumber-sub"),
         ),
       );
     }
@@ -436,13 +470,13 @@ class AllManga extends MProvider {
         detailsData["genres"] ?? [],
         detailsData["tags"] ?? [],
       ),
-      imageUrl: Urls.buildImgUrl(detailsData["thumbnail"] ?? ""),
-      link: Urls.buildMangaURL(mangaId),
+      imageUrl: URLS.buildMangaCoverUrl(detailsData["thumbnail"] ?? ""),
+      link: URLS.buildMangaURL(mangaId),
       name: MangaUtils.getMangaName(detailsData),
       status: MangaUtils.getStatus(detailsData['status']),
       description: MangaUtils.buildDescription(
-        detailsData["description"],
-        detailsData["altNames"],
+        detailsData["description"] ?? "",
+        detailsData["altNames"] ?? "",
       ),
       chapters: chapters,
     );
@@ -468,7 +502,7 @@ class AllManga extends MProvider {
 
   // For manga chapter pages
   @override
-  Future<List<String>> getPageList(String url) async {
+  Future<List<dynamic>> getPageList(String url) async {
     final split = url.split("/");
     if (split.length < 3) return [];
     final String mangaId = split[split.length - 2];
@@ -476,7 +510,7 @@ class AllManga extends MProvider {
     final chapterNum = chapter[1];
     final chapterType = chapter.last;
     final res = await client.post(
-      Uri.parse(Urls.apiUrl),
+      Uri.parse(URLS.API_URL),
       headers: this.postHeaders,
       body: jsonEncode(
         Queries.buildPageQuery(
@@ -487,14 +521,27 @@ class AllManga extends MProvider {
       ),
     );
     final json = jsonDecode(res.body);
-    print(bobobo); // DEBUG : REMOVE THIS
-    print(json); // DEBUG : REMOVE THIS
     final pagesData = json["data"]["chapterPages"]["edges"]?.first;
-    final baseUrl = pagesData["pictureUrlHead"];
-    List<String> pageUrls = [];
+    String pictureUrlHead = pagesData["pictureUrlHead"].toString();
+    List<dynamic> pageUrls = [];
     for (var page in pagesData["pictureUrls"]) {
-      final String pageUrl = page["url"].toString();
-      pageUrls.add("$baseUrl/$pageUrl");
+      final String pagePath = page["url"].toString();
+      final String pageImageUrl = URLS.buildMangaPageUrl(
+        pictureUrlHead,
+        pagePath,
+        preferenceImageQuality(),
+      );
+      pageUrls.add({
+        "url": URLS.addHttp(pageImageUrl),
+        "headers": {
+          "user-agent": HelperUtils.parseUserAgent(preferenceUserAgent()),
+          "accept":
+              "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          "referer": "https://allmanga.to/",
+          "accept-encoding": "gzip, deflate, br",
+          "priority": "i",
+        },
+      });
     }
     return pageUrls;
   }
@@ -524,11 +571,23 @@ you can get user agent strings from:
 Enter your custom user agent string below:""",
         text: "",
       ),
+      ListPreference(
+        key: "IMAGEQUALITY",
+        title: "Image Quality",
+        summary: "Set the image quality for manga pages",
+        valueIndex: 0,
+        entries: ["Original", "Wp=800", "Wp=480"],
+        entryValues: ["original", "800", "480"],
+      ),
     ];
   }
 
   String preferenceUserAgent() {
     return getPreferenceValue(source.id, "USERAGENT");
+  }
+
+  String preferenceImageQuality() {
+    return getPreferenceValue(source.id, "IMAGEQUALITY");
   }
 }
 

@@ -196,14 +196,6 @@ class Queries {
   }
 }
 
-class HelperUtils {
-  static String parseUserAgent(String? userAgent) {
-    if (userAgent == null || userAgent.isEmpty)
-      return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
-    return userAgent;
-  }
-}
-
 class MangaUtils {
   static String getMangaName(Map<String, String> mangaData) {
     String? englishName = mangaData["englishName"];
@@ -335,13 +327,13 @@ class AllManga extends MProvider {
   Map<String, String> get headers => {
     "Accept": "*/*",
     "referer": "https://allmanga.to/",
-    "user-agent": HelperUtils.parseUserAgent(preferenceUserAgent()),
+    "user-agent": preferenceUserAgent(),
   };
 
   Map<String, String> get postHeaders => {
     "Accept": "*/*",
     "referer": "https://allmanga.to/",
-    "user-agent": HelperUtils.parseUserAgent(preferenceUserAgent()),
+    "user-agent": preferenceUserAgent(),
     "content-type": "application/json",
   };
 
@@ -534,7 +526,7 @@ class AllManga extends MProvider {
       pageUrls.add({
         "url": URLS.addHttp(pageImageUrl),
         "headers": {
-          "user-agent": HelperUtils.parseUserAgent(preferenceUserAgent()),
+          "user-agent": preferenceUserAgent(),
           "accept":
               "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
           "referer": "https://allmanga.to/",
@@ -583,7 +575,13 @@ Enter your custom user agent string below:""",
   }
 
   String preferenceUserAgent() {
-    return getPreferenceValue(source.id, "USERAGENT");
+    final String? userAgent = getPreferenceValue(
+      source.id,
+      "USERAGENT",
+    )?.trim();
+    return (userAgent == null || userAgent.isEmpty)
+        ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        : userAgent;
   }
 
   String preferenceImageQuality() {

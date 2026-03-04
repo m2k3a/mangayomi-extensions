@@ -246,14 +246,9 @@ class MangaUtils {
     return "None";
   }
 
-  static String buildDescription(String? desc, List<String>? altNames) {
-    desc =
-        desc?.replaceAll(
-          RegExp(r"<(\/*?)(?!(em|p|br\s*\/|strong))\w+?.+?>"),
-          "",
-        ) ??
-        "No Description";
-    desc += (altNames != null && altNames.isNotEmpty)
+  static String buildDescription(String desc, List<String> altNames) {
+    desc = parseHtml(desc).body?.text ?? desc;
+    desc += altNames.isNotEmpty
         ? "\n\nAlternative Names: \n${altNames.join('\n')}"
         : "";
     return desc.trim();

@@ -188,12 +188,20 @@ class Atsumaru extends MProvider {
       contentJson.replaceAll("window.mangaPage = ", "").replaceAll(";", ""),
     )["mangaPage"];
 
-    final name = json["title"];
-    final imageUrl = json["poster"]["image"];
-    final description = json["synopsis"];
-    final status = json["status"];
-    final authors = json["authors"].map((author) => author["name"]);
-    final genres = json["tags"].map((tag) => tag["name"]);
+    final name = json["englishTitle"] ?? json["title"] ?? "No Title";
+    final imageUrl = json["poster"]?["image"];
+    final description =
+        json["synopsis"] +
+        (json["otherNames"] is List
+            ? "\n\nAlternative Titles:\n" +
+                  (json["otherNames"] ?? []).join("\n")
+            : "");
+    final status = json["status"] ?? "Unknown";
+    final authors = json["authors"]?.map((author) => author["name"]) ?? "None";
+    final genres =
+        json["tags"]?.map((tag) => tag["name"]) ??
+        json["genres"]?.map((genre) => genre["name"]) ??
+        [];
     final chapters = await getChapters(id, 0);
 
     MManga manga = MManga();
@@ -203,9 +211,10 @@ class Atsumaru extends MProvider {
     manga.imageUrl = "${source.baseUrl}/static/$imageUrl";
     manga.genre = "$genres".replaceAll(RegExp(r'[()]'), '').split(", ");
     manga.author = "$authors".replaceAll(RegExp(r'[()]'), '');
+    manga.artist = manga.author;
     manga.chapters = chapters;
     manga.description = description;
-    manga.status = parseStatus("pending", statusList);
+    manga.status = parseStatus(status, statusList);
 
     return manga;
   }

@@ -202,7 +202,9 @@ class Atsumaru extends MProvider {
         json["tags"]?.map((tag) => tag["name"]) ??
         json["genres"]?.map((genre) => genre["name"]) ??
         [];
-    final chapters = await getChapters(id, 0);
+    final chapters = await getChapters(id, {
+      for (var s in json["scanlators"]) s["id"]: s["name"],
+    });
 
     MManga manga = MManga();
 
@@ -219,14 +221,14 @@ class Atsumaru extends MProvider {
     return manga;
   }
 
-  Future<List<MChapter>> getChapters(String id, int page) async {
+  Future<List<MChapter>> getChapters(
+    String id,
+    Map<String, String> scanlators,
+  ) async {
     List<MChapter> chapters = [];
-    final currentPage = page;
 
     final res = await client.get(
-      Uri.parse(
-        "${source.apiUrl}/manga/chapters?id=$id&filter=all&sort=desc&page=$currentPage",
-      ),
+      Uri.parse("${source.apiUrl}/manga/allChapters?mangaId=$id"),
       headers: {
         "Accept": "*/*",
         "accept-language":
@@ -235,28 +237,16 @@ class Atsumaru extends MProvider {
       },
     );
 
-    final jsonData = json.decode(res.body);
-
-    final maxPageCount = jsonData["pages"] ?? 1;
-    final chaps = jsonData["chapters"] ?? [];
-
+    final chaps = json.decode(res.body)?["chapters"] ?? [];
     for (final chap in chaps) {
       final chapter = MChapter()
         ..name = chap["title"]
         ..url = "$id&chapterId=${chap["id"]}"
-        ..dateUpload = "${isoToUnix(chap["createdAt"])}"
-        ..scanlator = "${chap['pageCount']} Pages";
-
+        ..dateUpload = "${chap["createdAt"]}"
+        ..description = "${chap['pageCount']} Pages"
+        ..scanlator = scanlators[chap["scanlationMangaId"]] ?? "Unknown";
       chapters.add(chapter);
     }
-
-    if (chaps.isEmpty || currentPage >= maxPageCount) {
-      return chapters;
-    }
-
-    final nextPageChapters = await getChapters(id, currentPage + 1);
-    chapters.addAll(nextPageChapters);
-
     return chapters;
   }
 
@@ -274,11 +264,6 @@ class Atsumaru extends MProvider {
       images.add({"url": "${source.baseUrl}${imageObject["image"]}"});
     }
     return images;
-  }
-
-  int isoToUnix(String isoString) {
-    final dateTime = DateTime.parse(isoString);
-    return dateTime.toUtc().millisecondsSinceEpoch;
   }
 
   @override

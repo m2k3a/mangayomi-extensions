@@ -126,25 +126,31 @@ class ZoroTheme extends MProvider {
     ];
     final res = (await client.get(Uri.parse("${source.baseUrl}$url"))).body;
     MManga anime = MManga();
-    final status = xpath(
-      res,
-      '//*[@class="anisc-info"]/div[contains(text(),"Status:")]/span[2]/text()',
-    );
+    final status =
+        xpath(
+          res,
+          '//*[@class="anisc-info"]/div[contains(text(),"Status:")]/span[2]/text()',
+        ) ??
+        [];
     if (status.isNotEmpty) {
       anime.status = parseStatus(status.first, statusList);
     }
 
-    final author = xpath(
-      res,
-      '//*[@class="anisc-info"]/div[contains(text(),"Studios:")]/span/text()',
-    );
+    final author =
+        xpath(
+          res,
+          '//*[@class="anisc-info"]/div[contains(text(),"Studios:")]/span/text()',
+        ) ??
+        [];
     if (author.isNotEmpty) {
       anime.author = author.first.replaceAll("Studios:", "");
     }
-    final description = xpath(
-      res,
-      '//*[@class="anisc-info"]/div[contains(text(),"Overview:")]/text()',
-    );
+    final description =
+        xpath(
+          res,
+          '//*[@class="anisc-info"]/div[contains(text(),"Overview:")]/text()',
+        ) ??
+        [];
     if (description.isNotEmpty) {
       anime.description = description.first.replaceAll("Overview:", "");
     }
@@ -166,7 +172,11 @@ class ZoroTheme extends MProvider {
 
     final html = json.decode(resEp)["html"];
     final epElements = parseHtml(html).select("a.ep-item");
-
+    epElements.sort((b, a) {
+      final numA = int.tryParse(a.attr("data-number")) ?? 0;
+      final numB = int.tryParse(b.attr("data-number")) ?? 0;
+      return numA.compareTo(numB);
+    });
     List<MChapter>? episodesList = [];
 
     for (var epElement in epElements) {
@@ -178,8 +188,7 @@ class ZoroTheme extends MProvider {
       episode.url = epElement.getHref;
       episodesList.add(episode);
     }
-
-    anime.chapters = episodesList.reversed.toList();
+    anime.chapters = episodesList;
     return anime;
   }
 

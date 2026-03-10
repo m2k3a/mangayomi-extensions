@@ -1,6 +1,24 @@
 import 'package:mangayomi/bridge_lib.dart';
 import 'dart:convert';
 
+class URLS {
+  static String serverTypesPath(String sourceName) {
+    if (sourceName == "HiAnime") return "/ajax/v2/episode/servers?episodeId=";
+    return "/ajax/episode/servers?episodeId=";
+  }
+
+  static String streamDataPath1(String sourceName) {
+    if (sourceName == "HiAnime") return "/ajax/v2/episode/sources?id=";
+    return "/ajax/episode/sources?id=";
+  }
+
+  static String streamDataPath2(String sourceName, String id) {
+    if (sourceName == "HiAnime")
+      return "https://megacloud.blog/embed-2/v3/e-1/$id?k=1&autoPlay=1&oa=0&asi=1";
+    return "https://rapid-cloud.co/embed-2/v2/e-1/getSources?id=$id";
+  }
+}
+
 class ZoroTheme extends MProvider {
   ZoroTheme({required this.source});
 
@@ -227,7 +245,7 @@ class ZoroTheme extends MProvider {
       jsonDecode(
         (await client.get(
           Uri.parse(
-            "${source.baseUrl}/ajax/v2/episode/servers?episodeId=$episodeId",
+            "${source.baseUrl}${URLS.serverTypesPath(source.name ?? "")}$episodeId",
           ),
           headers: {"referer": "${source.baseUrl}/watch/$id?ep=$episodeId"},
         )).body,
@@ -277,7 +295,9 @@ class ZoroTheme extends MProvider {
   Future<Map<String, dynamic>> getStreamData(String dataId) async {
     Map<String, dynamic> resJson = jsonDecode(
       (await client.get(
-        Uri.parse("${source.baseUrl}/ajax/v2/episode/sources?id=$dataId"),
+        Uri.parse(
+          "${source.baseUrl}${URLS.streamDataPath1(source.name ?? "")}$dataId",
+        ),
         headers: {"referer": "${source.baseUrl}"},
       )).body,
     );
@@ -286,11 +306,15 @@ class ZoroTheme extends MProvider {
       "?",
     );
     String line = (await client.get(
-      Uri.parse(
-        "https://megacloud.blog/embed-2/v3/e-1/$id?k=1&autoPlay=1&oa=0&asi=1",
-      ),
+      Uri.parse(URLS.streamDataPath2(source.name ?? "", id)),
       headers: {"referer": "${source.baseUrl}"},
     )).body;
+    try {
+      final test = jsonDecode(line);
+      if (test is Map<String, dynamic> && test.containsKey("sources")) {
+        return test;
+      }
+    } catch (e) {}
     line = substringAfter(line, "</script>\n    ");
     line = substringBefore(line, "</head>");
     String key = getKeyFromLine(line);
@@ -539,8 +563,8 @@ class ZoroTheme extends MProvider {
           title: "Preferred server",
           summary: "",
           valueIndex: 0,
-          entries: ["Vidstreaming", "VidCloud"],
-          entryValues: ["Vidstreaming", "VidCloud"],
+          entries: ["Vidstreaming", "Vidcloud"],
+          entryValues: ["Vidstreaming", "Vidcloud"],
         ),
       ListPreference(
         key: "preferred_type1",
@@ -555,9 +579,9 @@ class ZoroTheme extends MProvider {
           key: "hoster_selection3",
           title: "Enable/Disable Hosts",
           summary: "",
-          entries: ["Vidstreaming", "VidCloud"],
-          entryValues: ["Vidstreaming", "VidCloud"],
-          values: ["Vidstreaming", "VidCloud"],
+          entries: ["Vidstreaming", "Vidcloud"],
+          entryValues: ["Vidstreaming", "Vidcloud"],
+          values: ["Vidstreaming", "Vidcloud"],
         ),
       if (source.name == "HiAnime")
         MultiSelectListPreference(

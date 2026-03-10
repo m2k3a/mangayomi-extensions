@@ -267,7 +267,14 @@ class ZoroTheme extends MProvider {
     return keys.join("");
   }
 
-  Future<String> getStreamLink(String dataId) async {
+  /// ### return keys usually are
+  /// `sources` -> [List] of [Map]s with keys `file` and `type` \
+  /// `tracks` -> [List] of [Map]s with keys `file`, `kind`, and sometimes `label`, `default`\
+  /// `encrypted` -> [bool] value\
+  /// `intro` -> `start` and `end` keys with [int] values in seconds\
+  /// `outro` -> `start` and `end` keys with [int] values in seconds\
+  /// `server` -> [String] value of the server name e.g. 4.
+  Future<Map<String, dynamic>> getStreamData(String dataId) async {
     Map<String, dynamic> resJson = jsonDecode(
       (await client.get(
         Uri.parse("${source.baseUrl}/ajax/v2/episode/sources?id=$dataId"),
@@ -302,15 +309,7 @@ class ZoroTheme extends MProvider {
         },
       )).body,
     );
-    String? link = dede["sources"].length > 0
-        ? dede["sources"][0]["link"] ?? dede["sources"][0]["file"]
-        : null;
-    if (link == null || link.isEmpty) {
-      throw Exception(
-        "Stream link not found in response. in func: getStreamLink",
-      );
-    }
-    return link;
+    return dede;
   }
 
   Future<Video?> getVideoServers(
@@ -322,17 +321,27 @@ class ZoroTheme extends MProvider {
     final name = "$serverName - $subDubType";
 
     // dataList[0] is dataId
-    if (dataList.isEmpty) {
-      return null;
-    }
-    String masterUrl = await getStreamLink(dataList[0]);
-    print(masterUrl);
+    if (dataList.isEmpty) return null;
+    Map<String, dynamic> sData = await getStreamData(dataList[0]);
+
+    List<Track> subtitles = [];
+    (sData['tracks'] ?? []).forEach((track) {
+      if (track['kind'] == 'subtitles' || track['kind'] == 'captions') {
+        subtitles.add(
+          MTrack(file: track['file'] ?? track['link'], label: track['label']),
+        );
+      }
+    });
+    String url = sData['sources'] != null && sData['sources'].isNotEmpty
+        ? sData['sources'][0]['file']
+        : "MEOW";
     Video video = MVideo();
     video
-      ..url = masterUrl
-      ..originalUrl = masterUrl
+      ..url = url
+      ..originalUrl = url
       ..quality = "$name - Default"
-      ..headers = heheaders;
+      ..headers = heheaders
+      ..subtitles = subtitles;
     return video;
   }
 

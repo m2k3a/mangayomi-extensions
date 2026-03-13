@@ -223,12 +223,12 @@ class ZoroTheme extends MProvider {
     final serverTypes = await getVideoServerTypes(id, epId);
     for (String type in preferenceTypeSelection()) {
       for (String hoster in preferenceHosterSelection()) {
-        Video? videoRes = await getVideoServers(
+        List<MVideo>? videoRes = await getVideoServers(
           type,
           hoster,
           serverTypes[type]?[hoster] ?? [],
         );
-        if (videoRes != null) videos.add(videoRes);
+        if (videoRes != null) videos.addAll(videoRes);
       }
     }
     return sortVideos(videos);
@@ -274,11 +274,9 @@ class ZoroTheme extends MProvider {
     while (onePartRegex.hasMatch(line)) {
       try {
         String? part = onePartRegex.stringMatch(line);
-        print(part);
         keys.add(part ?? "");
         line = line.replaceFirst(onePartRegex, "");
-      } catch (e) {
-        print("err: $line");
+      } catch (_) {
         break;
       }
     }
@@ -336,7 +334,7 @@ class ZoroTheme extends MProvider {
     return dede;
   }
 
-  Future<Video?> getVideoServers(
+  Future<List<MVideo>?> getVideoServers(
     String subDubType,
     String serverName,
     List<String> dataList,
@@ -356,17 +354,53 @@ class ZoroTheme extends MProvider {
         );
       }
     });
-    String url = sData['sources'] != null && sData['sources'].isNotEmpty
-        ? sData['sources'][0]['file']
-        : "MEOW";
-    Video video = MVideo();
-    video
-      ..url = url
-      ..originalUrl = url
-      ..quality = "$name - Default"
-      ..headers = heheaders
-      ..subtitles = subtitles;
-    return video;
+    List<MVideo> videos = [];
+    final sources = sData['sources'] as List<dynamic>?;
+    if (sources != null && sources.isNotEmpty) {
+      final masterUrl = sources[0]['file'] as String;
+      final type = sources[0]['type'] as String?;
+      if (type == "hls") {
+        final masterPlaylistRes = (await client.get(
+          Uri.parse(masterUrl),
+          headers: heheaders,
+        )).body;
+
+        for (var it in substringAfter(
+          masterPlaylistRes,
+          "#EXT-X-STREAM-INF:",
+        ).split("#EXT-X-STREAM-INF:")) {
+          final quality =
+              "${substringBefore(substringBefore(substringAfter(substringAfter(it, "RESOLUTION="), "x"), ","), "\n")}p";
+
+          String videoUrl = substringBefore(substringAfter(it, "\n"), "\n");
+
+          if (!videoUrl.startsWith("http")) {
+            videoUrl =
+                "${masterUrl.split("/").sublist(0, masterUrl.split("/").length - 1).join("/")}/$videoUrl";
+          }
+
+          MVideo video = MVideo();
+          video
+            ..url = videoUrl
+            ..originalUrl = videoUrl
+            ..quality = "$name - $quality"
+            ..headers = heheaders
+            ..subtitles = subtitles;
+          videos.add(video);
+        }
+      } else {
+        MVideo video = MVideo();
+        video
+          ..url = masterUrl
+          ..originalUrl = masterUrl
+          ..quality = "$name - Default"
+          ..headers = heheaders
+          ..subtitles = subtitles;
+        videos.add(video);
+      }
+    }
+
+    return videos;
   }
 
   MPages animeElementM(String res) {

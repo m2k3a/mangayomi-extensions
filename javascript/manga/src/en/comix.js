@@ -1,17 +1,16 @@
 const mangayomiSources = [
   {
-    id: 5738565392,
-    name: "Comix",
-    lang: "en",
-    baseUrl: "https://comix.to",
-    apiUrl: "https://comix.to/api/v2/",
-    iconUrl: "https://comix.to/images/icon_512x512.png",
-    typeSource: "single",
-    isManga: true,
-    itemType: 0,
-    version: "0.1.0",
-    pkgPath: "manga/src/en/comix.js",
-  },
+    "id": 5738565392,
+    "name": "Comix",
+    "lang": "en",
+    "baseUrl": "https://comix.to",
+    "apiUrl": "https://comix.to/api/v2/",
+    "iconUrl": "https://comix.to/images/icon_512x512.png",
+    "typeSource": "single",
+    "itemType": 0,
+    "version": "0.1.0",
+    "pkgPath": "manga/src/en/comix.js"
+  }
 ];
 
 const NSFW_GENRE_IDS = ["87264", "87265", "87266", "87268"];
@@ -326,9 +325,9 @@ class DefaultExtension extends MProvider {
           const curIsOfficial = existing.scanlation_group_id === 9275 || existing.is_official === 1;
           const better =
             (newIsOfficial && !curIsOfficial) ? true :
-            (!newIsOfficial && curIsOfficial) ? false :
-            ch.votes !== existing.votes ? ch.votes > existing.votes :
-            ch.updated_at > existing.updated_at;
+              (!newIsOfficial && curIsOfficial) ? false :
+                ch.votes !== existing.votes ? ch.votes > existing.votes :
+                  ch.updated_at > existing.updated_at;
           if (better) seen.set(key, ch);
         }
       }

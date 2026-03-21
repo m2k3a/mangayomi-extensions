@@ -659,11 +659,12 @@ class ZoroTheme extends MProvider {
         return qualityMatchB - qualityMatchA;
       }
 
-      final regex = RegExp(r'(\d+)p');
-      final matchA = regex.firstMatch(a.quality);
-      final matchB = regex.firstMatch(b.quality);
-      final int qualityNumA = int.tryParse(matchA?.group(1) ?? '0') ?? 0;
-      final int qualityNumB = int.tryParse(matchB?.group(1) ?? '0') ?? 0;
+      final bigRegex = RegExp(r' - (\d+).*$');
+      final regex = RegExp(r'\d+');
+      String? matchA = regex.stringMatch(bigRegex.stringMatch(a.quality) ?? "");
+      String? matchB = regex.stringMatch(bigRegex.stringMatch(b.quality) ?? "");
+      final int qualityNumA = int.tryParse(matchA ?? '0') ?? 0;
+      final int qualityNumB = int.tryParse(matchB ?? '0') ?? 0;
       return qualityNumB - qualityNumA;
     });
     return videos;

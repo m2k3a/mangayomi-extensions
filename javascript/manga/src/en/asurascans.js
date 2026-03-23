@@ -16,7 +16,7 @@ const mangayomiSources = [{
 class DefaultExtension extends MProvider {
 
     getHeaders(url) {
-        return { "Referer": this.source.baseUrl };
+        return { "Referer": this.siteBase };
     }
 
     get apiBase() {
@@ -39,7 +39,7 @@ class DefaultExtension extends MProvider {
         const list  = items.map(item => ({
             name:     item.title || item.name || "",
             imageUrl: item.cover || item.cover_url || "",
-            link:     item.public_url || `/comics/${item.slug}-f6174291`
+            link:     item.public_url || `/comics/${item.slug}`
         }));
         const currentPage = meta.current_page || meta.page || 1;
         const lastPage    = meta.last_page    || meta.total_pages || 1;
@@ -98,13 +98,22 @@ class DefaultExtension extends MProvider {
         const status      = this.toStatus(s.status);
         const genre       = (s.genres || []).map(g => g.name);
 
-        const chapRes  = await new Client().get(
-            `${this.apiBase}/api/series/${slug}/chapters?page=1&limit=9999`
-        );
-        const rawChaps = JSON.parse(chapRes.body).data || [];
+        // paginated chapter fetch
+        const allChaps = [];
+        let pageNum = 1;
+        const limit = 100;
+        while (true) {
+            const chapRes  = await new Client().get(
+                `${this.apiBase}/api/series/${slug}/chapters?page=${pageNum}&limit=${limit}`
+            );
+            const pageData = JSON.parse(chapRes.body).data || [];
+            allChaps.push(...pageData);
+            if (pageData.length < limit) break;
+            pageNum++;
+        }
 
         // chapter url = "seriesSlug||chapterSlug" für getPageList
-        const chapters = rawChaps.map(ch => ({
+        const chapters = allChaps.map(ch => ({
             name:       `Chapter ${ch.number}`,
             url:        `${slug}||${ch.slug}`,
             dateUpload: this.parseDate(ch.published_at)

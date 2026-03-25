@@ -1,18 +1,18 @@
 const mangayomiSources = [
 	{
-		id: 524070078,
-		name: "Asura Scans",
-		lang: "en",
-		baseUrl: "https://asurascans.com",
-		apiUrl: "https://api.asurascans.com",
-		iconUrl:
+		"id": 524070078,
+		"name": "Asura Scans",
+		"lang": "en",
+		"baseUrl": "https://asurascans.com",
+		"apiUrl": "https://api.asurascans.com",
+		"iconUrl":
 			"https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.asurascans.png",
-		typeSource: "single",
-		itemType: 0,
-		version: "0.2.14",
-		dateFormat: "",
-		dateFormatLocale: "",
-		pkgPath: "manga/src/en/asurascans.js"
+		"typeSource": "single",
+		"itemType": 0,
+		"version": "0.2.14",
+		"dateFormat": "",
+		"dateFormatLocale": "",
+		"pkgPath": "manga/src/en/asurascans.js"
 	}
 ];
 

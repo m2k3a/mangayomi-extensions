@@ -12,8 +12,8 @@ const mangayomiSources = [
 		version: "0.2.14",
 		dateFormat: "",
 		dateFormatLocale: "",
-		pkgPath: "manga/src/en/asurascans.js",
-	},
+		pkgPath: "manga/src/en/asurascans.js"
+	}
 ];
 
 class DefaultExtension extends MProvider {

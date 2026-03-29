@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "itemType": 2,
     "version": "0.0.1",
-    "pkgPath": "",
+    "pkgPath": "novel/src/en/novelfire.js",
     "notes": ""
 }];
 

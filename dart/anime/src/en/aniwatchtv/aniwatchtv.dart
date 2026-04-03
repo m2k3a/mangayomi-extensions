@@ -1,6 +1,16 @@
 import 'package:mangayomi/bridge_lib.dart';
 import 'dart:convert';
 
+class Utils {
+  static String getNameFromElement(MElement element, [bool isEn = true]) {
+    final elm = element.selectFirst(".film-name");
+    String? engTitle = elm?.text.trim();
+    String? japTitle = elm?.attr("data-jname").trim();
+    if (isEn) return engTitle ?? japTitle ?? "No Title";
+    return japTitle ?? engTitle ?? "No Title";
+  }
+}
+
 class AniwatchtvSource extends MProvider {
   AniwatchtvSource({required this.source});
 
@@ -18,7 +28,7 @@ class AniwatchtvSource extends MProvider {
     "referer": "https://aniwatchtv.to/",
   };
 
-  String baseUrl = "https://aniwatchtv.to/";
+  String baseUrl = "https://aniwatchtv.to";
 
   String addOption(String url, String key, String value) {
     if (value.isEmpty) return "";
@@ -93,7 +103,7 @@ class AniwatchtvSource extends MProvider {
     }
     end += addOption(end, "page", "$page");
     final response = await client.get(
-      Uri.parse("${this.baseUrl}$end"),
+      Uri.parse("${this.baseUrl}/$end"),
       headers: this.headers,
     );
     if (response.statusCode != 200)
@@ -105,7 +115,8 @@ class AniwatchtvSource extends MProvider {
     for (var card in cards) {
       String? imgUrl = card.selectFirst("img")?.attr("data-src");
       String? linkUrl = card.selectFirst("a")?.attr("href");
-      String title = card.selectFirst("h3")?.text.trim() ?? "No Title";
+      // ability to add option to choose between en and jp titles later on
+      String title = Utils.getNameFromElement(card);
       int subCount =
           int.tryParse(
             card.selectFirst(".tick-item.tick-sub")?.text.trim() ?? "0",
@@ -129,7 +140,13 @@ class AniwatchtvSource extends MProvider {
           ) ??
           0;
 
-      mangaList.add(MManga(name: title, imageUrl: imgUrl, link: linkUrl));
+      mangaList.add(
+        MManga(
+          name: title,
+          imageUrl: imgUrl,
+          link: "${this.baseUrl}${linkUrl ?? ""}",
+        ),
+      );
     }
     return MPages(mangaList, cards.isNotEmpty);
   }

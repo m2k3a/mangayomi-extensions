@@ -2,7 +2,7 @@ import 'package:mangayomi/bridge_lib.dart';
 import 'dart:convert';
 
 class Utils {
-  static String getNameFromElement(MElement element, [bool isEn = true]) {
+  static String getMangaNameFromElement(MElement element, [bool isEn = true]) {
     final elm = element.selectFirst(".film-name");
     String? engTitle = elm?.text.trim();
     String? japTitle = elm?.attr("data-jname").trim();
@@ -44,12 +44,31 @@ class Utils {
     return genres;
   }
 
-  static String getStatusString(MElement document) {
-    MElement? statusElement = document.selectFirst(
+  static String getStatusString(MElement element) {
+    MElement? statusElement = element.selectFirst(
       ".anisc-info .item:contains(Status) .name",
     );
     if (statusElement == null) return "Unknown";
     return statusElement.text.trim();
+  }
+
+  static String getEpisodeTitleFromElement(
+    MElement episodeElm, [
+    bool isEn = true,
+  ]) {
+    final elm = episodeElm.selectFirst(".ep-name");
+    String? engTitle = elm?.text.trim();
+    String? japTitle = elm?.attr("data-jname").trim();
+    if (isEn) return engTitle ?? japTitle ?? "No Title";
+    return japTitle ?? engTitle ?? "No Title";
+  }
+
+  static String getEpisodeDataNumberFromElement(MElement episodeElm) {
+    return episodeElm.attr("data-number");
+  }
+
+  static String getEpisodeEndpointFromElement(MElement episodeElm) {
+    return episodeElm.attr("href");
   }
 }
 
@@ -140,7 +159,6 @@ class AniwatchtvSource extends MProvider {
         }
         if (selectedGenres.isNotEmpty)
           end += addOption(end, "genres", selectedGenres.join(","));
-        print(end);
       }
     }
     end += addOption(end, "page", "$page");
@@ -158,7 +176,7 @@ class AniwatchtvSource extends MProvider {
       String? imgUrl = card.selectFirst("img")?.attr("data-src");
       String? linkUrl = card.selectFirst("a")?.attr("href");
       // ability to add option to choose between en and jp titles later on
-      String title = Utils.getNameFromElement(card);
+      String title = Utils.getMangaNameFromElement(card);
       int subCount =
           int.tryParse(
             card.selectFirst(".tick-item.tick-sub")?.text.trim() ?? "0",
@@ -191,6 +209,44 @@ class AniwatchtvSource extends MProvider {
       );
     }
     return MPages(mangaList, cards.isNotEmpty);
+  }
+
+  Future<List<MChapter>?> _getChapters(String url) async {
+    final String mangaId = url.split('/').last.split('-').last;
+    final String endpoint = "/ajax/v2/episode/list/$mangaId";
+    final json = jsonDecode(
+      (await client.get(
+        Uri.parse("${this.baseUrl}$endpoint"),
+        headers: this.headers..addAll({"referer": url}),
+      )).body,
+    );
+    if (json == null || (json as Map<String, dynamic>).isEmpty)
+      throw Exception(
+        "Error fetching chapters: ${json.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
+      );
+    MDocument document = parseHtml(json["html"] ?? "");
+    List<MChapter> chapters = [];
+    List<MElement> episodeElements = document.select(".ssl-item.ep-item");
+    for (var episodeElm in episodeElements) {
+      chapters.add(
+        MChapter(
+          // TODO: add option for jp title later on
+          name:
+              "Chapter ${Utils.getEpisodeDataNumberFromElement(episodeElm)} - ${Utils.getEpisodeTitleFromElement(episodeElm)}",
+          url:
+              "${this.baseUrl}${Utils.getEpisodeEndpointFromElement(episodeElm)}",
+          // NOTE: idk why but the description is not showing up in the app, so added it to the name for now, :)
+          description: Utils.getEpisodeTitleFromElement(episodeElm),
+        ),
+      );
+    }
+    chapters.sort(
+      (b, a) => (int.parse(a.name?.split(' - ').first.split(' ').last ?? "0"))
+          .compareTo(
+            int.parse(b.name?.split(' - ').first.split(' ').last ?? "0"),
+          ),
+    );
+    return chapters;
   }
 
   @override
@@ -239,18 +295,16 @@ class AniwatchtvSource extends MProvider {
         "Error parsing data: Document is null, website structure changed?",
       );
     }
+    List<MChapter>? chapters = await _getChapters(url);
     return MManga(
       author: Utils.getStatsFromElement(document),
       artist: Utils.getStatsFromElement(document),
       genre: Utils.getGenresFromElement(document),
-      // imageUrl: "" // no need since already set,
-      // link: "", // no need since already set
-      // name: "", // no need since already set
       status: parseStatus(Utils.getStatusString(document), [
         {"Currently Airing": 0, "Finished Airing": 1, "Not yet aired": 4},
       ]),
       description: Utils.getDescriptionFromElement(document),
-      chapters: [], // TODO: implement chapters for anime episodes
+      chapters: chapters,
     );
   }
 

@@ -116,7 +116,18 @@ class AniwatchtvSource extends MProvider {
             card.selectFirst(".tick-item.tick-dub")?.text.trim() ?? "0",
           ) ??
           0;
+      int totalEps =
+          int.tryParse(
+            card.selectFirst(".tick-item.tick-eps")?.text.trim() ?? "0",
+          ) ??
+          0;
+      // this type is same as TypeFilter
       String type = card.selectFirst(".fdi-item")?.text.trim() ?? "";
+      int duration =
+          int.tryParse(
+            card.selectFirst(".fdi-item.fdi-duration")?.text.trim() ?? "0",
+          ) ??
+          0;
 
       mangaList.add(MManga(name: title, imageUrl: imgUrl, link: linkUrl));
     }

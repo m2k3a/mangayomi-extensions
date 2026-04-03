@@ -646,16 +646,16 @@ class AniwatchtvSource extends MProvider {
   bool get preferenceIsEn =>
       getPreferenceValue(this.source.id ?? 0, "title_language_preference") ??
       true;
-  String get preferredAudio =>
+  String get preferencePreferredAudio =>
       getPreferenceValue(this.source.id ?? 0, "preferred_audio_preference") ??
       "sub";
-  String get preferredVideoSource =>
+  String get preferencePreferredVideoSource =>
       getPreferenceValue(
         this.source.id ?? 0,
         "preferred_video_source_preference",
       ) ??
       "VidSrc";
-  List<String> get enabledVideoSources =>
+  List<String> get preferenceEnabledVideoSources =>
       (getPreferenceValue(
                 this.source.id ?? 0,
                 "preferred_video_sources_enabled_preference",

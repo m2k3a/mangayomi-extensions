@@ -9,6 +9,48 @@ class Utils {
     if (isEn) return engTitle ?? japTitle ?? "No Title";
     return japTitle ?? engTitle ?? "No Title";
   }
+
+  static String getStatsFromElement(MElement element) {
+    List<String> stats = [];
+    List<MElement> infoElements = element.select(".film-stats > .tick > .item");
+    for (var infoElm in infoElements) {
+      stats.add(infoElm.text.trim());
+    }
+    return stats.join(", ");
+  }
+
+  static String getDescriptionFromElement(MElement element) {
+    List<String> lines = (element.selectFirst(".anisc-info")?.text.trim() ?? "")
+        .split(RegExp(r"\s{5,}"));
+    List<String> descriptionLines = [];
+    String tempLine = "";
+    for (String line in lines) {
+      if (line.contains(RegExp(r"^[a-zA-Z ]+:"))) {
+        descriptionLines.add(tempLine);
+        tempLine = "$line";
+        continue;
+      }
+      tempLine += "\n$line";
+    }
+    return descriptionLines.join("\n\n").trim();
+  }
+
+  static List<String> getGenresFromElement(MElement element) {
+    List<String> genres = [];
+    List<MElement> genreElements = element.select(".anisc-info div [title]");
+    for (var genreElm in genreElements) {
+      genres.add(genreElm.text.trim());
+    }
+    return genres;
+  }
+
+  static String getStatusString(MElement document) {
+    MElement? statusElement = document.selectFirst(
+      ".anisc-info .item:contains(Status) .name",
+    );
+    if (statusElement == null) return "Unknown";
+    return statusElement.text.trim();
+  }
 }
 
 class AniwatchtvSource extends MProvider {
@@ -184,7 +226,32 @@ class AniwatchtvSource extends MProvider {
 
   @override
   Future<MManga> getDetail(String url) async {
-    // TODO: implement
+    final response = await client.get(Uri.parse(url), headers: this.headers);
+    if (response.statusCode != 200)
+      throw Exception(
+        "Error fetching data: ${response.statusCode} WEBSITE DOWN?",
+      );
+    MElement? document = parseHtml(
+      response.body,
+    ).selectFirst(".ani_detail-stage");
+    if (document == null) {
+      throw Exception(
+        "Error parsing data: Document is null, website structure changed?",
+      );
+    }
+    return MManga(
+      author: Utils.getStatsFromElement(document),
+      artist: Utils.getStatsFromElement(document),
+      genre: Utils.getGenresFromElement(document),
+      // imageUrl: "" // no need since already set,
+      // link: "", // no need since already set
+      // name: "", // no need since already set
+      status: parseStatus(Utils.getStatusString(document), [
+        {"Currently Airing": 0, "Finished Airing": 1, "Not yet aired": 4},
+      ]),
+      description: Utils.getDescriptionFromElement(document),
+      chapters: [], // TODO: implement chapters for anime episodes
+    );
   }
 
   // For novel html content

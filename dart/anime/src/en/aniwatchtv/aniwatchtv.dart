@@ -642,6 +642,27 @@ class AniwatchtvSource extends MProvider {
       ),
     ];
   }
+
+  bool get preferenceIsEn =>
+      getPreferenceValue(this.source.id ?? 0, "title_language_preference") ??
+      true;
+  String get preferredAudio =>
+      getPreferenceValue(this.source.id ?? 0, "preferred_audio_preference") ??
+      "sub";
+  String get preferredVideoSource =>
+      getPreferenceValue(
+        this.source.id ?? 0,
+        "preferred_video_source_preference",
+      ) ??
+      "VidSrc";
+  List<String> get enabledVideoSources =>
+      (getPreferenceValue(
+                this.source.id ?? 0,
+                "preferred_video_sources_enabled_preference",
+              )
+              as List<dynamic>?)
+          ?.cast<String>() ??
+      ["VidSrc", "MegaCloud", "T-Cloud"];
 }
 
 AniwatchtvSource main(MSource source) {

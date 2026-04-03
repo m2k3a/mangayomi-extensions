@@ -311,25 +311,25 @@ class AniwatchtvSource extends MProvider {
   // For novel html content
   @override
   Future<String> getHtmlContent(String name, String url) async {
-    // TODO: implement
+    return "";
   }
 
   // Clean html up for reader
   @override
   Future<String> cleanHtmlContent(String html) async {
-    // TODO: implement
+    return "";
   }
 
   // For anime episode video list
   @override
   Future<List<MVideo>> getVideoList(String url) async {
-    // TODO: implement
+    return [];
   }
 
   // For manga chapter pages
   @override
   Future<List<String>> getPageList(String url) async {
-    // TODO: implement
+    return [];
   }
 
   @override
@@ -606,7 +606,41 @@ class AniwatchtvSource extends MProvider {
 
   @override
   List<dynamic> getSourcePreferences() {
-    return [];
+    return [
+      CheckBoxPreference(
+        key: "title_language_preference",
+        title: "Title Language",
+        summary:
+            "Enable to show titles (names only) in English (disable to show in Japanese where available)",
+        value: true,
+      ),
+      ListPreference(
+        key: "preferred_audio_preference",
+        title: "Preferred Audio SUB/DUB",
+        summary:
+            "Choose your preferred audio for anime episodes. This will be used to priortize the selected audio where both SUB and DUB are available.",
+        entries: ["SUB", "DUB"],
+        entryValues: ["sub", "dub"],
+        valueIndex: 0,
+      ),
+      ListPreference(
+        key: "preferred_video_source_preference",
+        title: "Preferred Video Source",
+        summary: "It will always be the default go-to when you open a episode.",
+        entries: ["VidSrc", "MegaCloud", "T-Cloud"],
+        entryValues: ["VidSrc", "MegaCloud", "T-Cloud"],
+        valueIndex: 0,
+      ),
+      MultiSelectListPreference(
+        key: "preferred_video_sources_enabled_preference",
+        title: "Enabled Video Sources",
+        summary:
+            "Selects which servers are enabled for fetching videos (if you disable a server here, it will not be used at all, even if it's the preferred source. This is useful if you want to exclude certain servers entirely).",
+        entries: ["VidSrc", "MegaCloud", "T-Cloud"],
+        entryValues: ["VidSrc", "MegaCloud", "T-Cloud"],
+        values: ["VidSrc", "MegaCloud", "T-Cloud"],
+      ),
+    ];
   }
 }
 

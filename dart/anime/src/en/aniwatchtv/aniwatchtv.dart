@@ -12,40 +12,165 @@ class AniwatchtvSource extends MProvider {
   bool get supportsLatest => true;
 
   @override
-  Map<String, String> get headers => {};
-  
+  Map<String, String> get headers => {
+    "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36",
+    "referer": "https://aniwatchtv.to/",
+  };
+
+  String baseUrl = "https://aniwatchtv.to/";
+
+  String addOption(String url, String key, String value) {
+    if (value.isEmpty) return "";
+    if (url.endsWith("?"))
+      return "$key=$value";
+    else
+      return "&$key=$value";
+  }
+
+  Future<MPages> _getFiltered(
+    FilterList filterList,
+    int page, [
+    String? query,
+  ]) async {
+    final filters = filterList.filters;
+    String end = "";
+    if (query != null && query.isNotEmpty) {
+      end += "search?";
+      end += addOption(end, "keyword", query);
+    } else {
+      end += "filter?";
+    }
+    for (var filter in filters) {
+      if (filter.type == "TypeFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "type", option);
+      } else if (filter.type == "StatusFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "status", option);
+      } else if (filter.type == "RatedFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "rated", option);
+      } else if (filter.type == "ScoreFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "score", option);
+      } else if (filter.type == "SeasonFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "season", option);
+      } else if (filter.type == "LanguageFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "language", option);
+      } else if (filter.type == "StartYearFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "sy", option);
+      } else if (filter.type == "StartMonthFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "sm", option);
+      } else if (filter.type == "StartDayFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "sd", option);
+      } else if (filter.type == "EndYearFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "ey", option);
+      } else if (filter.type == "EndMonthFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "em", option);
+      } else if (filter.type == "EndDayFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "ed", option);
+      } else if (filter.type == "SortFilter") {
+        String option = filter.values[filter.state].value;
+        end += addOption(end, "sort", option);
+      } else if (filter.type == "GenreFilter") {
+        List<String> selectedGenres = [];
+        for (var genre in filter.state) {
+          if (genre.state) selectedGenres.add(genre.value);
+        }
+        if (selectedGenres.isNotEmpty)
+          end += addOption(end, "genres", selectedGenres.join(","));
+        print(end);
+      }
+    }
+    end += addOption(end, "page", "$page");
+    final response = await client.get(
+      Uri.parse("${this.baseUrl}$end"),
+      headers: this.headers,
+    );
+    if (response.statusCode != 200)
+      throw Exception(
+        "Error fetching data: ${response.statusCode} WEBSITE DOWN?",
+      );
+    final cards = parseHtml(response.body).getElementsByClassName("flw-item");
+    List<MManga> mangaList = [];
+    for (var card in cards) {
+      String? imgUrl = card.selectFirst("img")?.attr("data-src");
+      String? linkUrl = card.selectFirst("a")?.attr("href");
+      String title = card.selectFirst("h3")?.text.trim() ?? "No Title";
+      int subCount =
+          int.tryParse(
+            card.selectFirst(".tick-item.tick-sub")?.text.trim() ?? "0",
+          ) ??
+          0;
+      int dubCount =
+          int.tryParse(
+            card.selectFirst(".tick-item.tick-dub")?.text.trim() ?? "0",
+          ) ??
+          0;
+      String type = card.selectFirst(".fdi-item")?.text.trim() ?? "";
+
+      mangaList.add(MManga(name: title, imageUrl: imgUrl, link: linkUrl));
+    }
+    return MPages(mangaList, cards.isNotEmpty);
+  }
+
   @override
   Future<MPages> getPopular(int page) async {
-    // TODO: implement
+    final filters = getFilterList();
+    // most watched is default for popular
+    for (var filter in filters) {
+      if (filter.type == "SortFilter") {
+        (filter as SelectFilter).state = 6;
+        break;
+      }
+    }
+    return _getFiltered(FilterList(filters), page);
   }
 
   @override
   Future<MPages> getLatestUpdates(int page) async {
-    // TODO: implement
+    final filters = getFilterList();
+    // recent updates is default for getlatestupdates
+    for (var filter in filters) {
+      if (filter.type == "SortFilter") {
+        (filter as SelectFilter).state = 2;
+        break;
+      }
+    }
+    return _getFiltered(FilterList(filters), page);
   }
 
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
-    // TODO: implement
+    return _getFiltered(filterList, page, query);
   }
 
   @override
   Future<MManga> getDetail(String url) async {
     // TODO: implement
   }
-  
+
   // For novel html content
   @override
   Future<String> getHtmlContent(String name, String url) async {
     // TODO: implement
   }
-  
+
   // Clean html up for reader
   @override
   Future<String> cleanHtmlContent(String html) async {
     // TODO: implement
   }
-  
+
   // For anime episode video list
   @override
   Future<List<MVideo>> getVideoList(String url) async {
@@ -54,21 +179,288 @@ class AniwatchtvSource extends MProvider {
 
   // For manga chapter pages
   @override
-  Future<List<String>> getPageList(String url) async{
+  Future<List<String>> getPageList(String url) async {
     // TODO: implement
   }
 
   @override
   List<dynamic> getFilterList() {
-    // TODO: implement
+    return [
+      GroupFilter("GenreFilter", "Genre", [
+        CheckBoxFilter("Action", "1"),
+        CheckBoxFilter("Adventure", "2"),
+        CheckBoxFilter("Cars", "3"),
+        CheckBoxFilter("Comedy", "4"),
+        CheckBoxFilter("Dementia", "5"),
+        CheckBoxFilter("Demons", "6"),
+        CheckBoxFilter("Drama", "8"),
+        CheckBoxFilter("Ecchi", "9"),
+        CheckBoxFilter("Fantasy", "10"),
+        CheckBoxFilter("Game", "11"),
+        CheckBoxFilter("Harem", "35"),
+        CheckBoxFilter("Historical", "13"),
+        CheckBoxFilter("Horror", "14"),
+        CheckBoxFilter("Isekai", "44"),
+        CheckBoxFilter("Josei", "43"),
+        CheckBoxFilter("Kids", "15"),
+        CheckBoxFilter("Magic", "16"),
+        CheckBoxFilter("Martial Arts", "17"),
+        CheckBoxFilter("Mecha", "18"),
+        CheckBoxFilter("Military", "38"),
+        CheckBoxFilter("Music", "19"),
+        CheckBoxFilter("Mystery", "7"),
+        CheckBoxFilter("Parody", "20"),
+        CheckBoxFilter("Police", "39"),
+        CheckBoxFilter("Psychological", "40"),
+        CheckBoxFilter("Romance", "22"),
+        CheckBoxFilter("Samurai", "21"),
+        CheckBoxFilter("School", "23"),
+        CheckBoxFilter("Sci-Fi", "24"),
+        CheckBoxFilter("Seinen", "42"),
+        CheckBoxFilter("Shoujo", "25"),
+        CheckBoxFilter("Shoujo Ai", "26"),
+        CheckBoxFilter("Shounen", "27"),
+        CheckBoxFilter("Shounen Ai", "28"),
+        CheckBoxFilter("Slice of Life", "36"),
+        CheckBoxFilter("Space", "29"),
+        CheckBoxFilter("Sports", "30"),
+        CheckBoxFilter("Super Power", "31"),
+        CheckBoxFilter("Supernatural", "37"),
+        CheckBoxFilter("Thriller", "41"),
+        CheckBoxFilter("Vampire", "32"),
+      ]),
+      SeparatorFilter(),
+      SelectFilter("TypeFilter", "Type", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("Movie", "1"),
+        SelectFilterOption("TV", "2"),
+        SelectFilterOption("OVA", "3"),
+        SelectFilterOption("ONA", "4"),
+        SelectFilterOption("Special", "5"),
+        SelectFilterOption("Music", "6"),
+      ]),
+      SelectFilter("StatusFilter", "Status", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("Finished Airing", "1"),
+        SelectFilterOption("Currently Airing", "2"),
+        SelectFilterOption("Not yet aired", "3"),
+      ]),
+      SelectFilter("RatedFilter", "Rated", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("G - All Ages", "1"),
+        SelectFilterOption("PG - Children", "2"),
+        SelectFilterOption("PG-13 - Teens 13 or older", "3"),
+        SelectFilterOption("R - 17+ (violence & profanity)", "4"),
+        SelectFilterOption("R+ - Mild Nudity", "5"),
+        SelectFilterOption("Rx - Hentai", "6"),
+      ]),
+      SelectFilter("ScoreFilter", "Score", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("(1) Appalling", "1"),
+        SelectFilterOption("(2) Horrible", "2"),
+        SelectFilterOption("(3) Very Bad", "3"),
+        SelectFilterOption("(4) Bad", "4"),
+        SelectFilterOption("(5) Average", "5"),
+        SelectFilterOption("(6) Fine", "6"),
+        SelectFilterOption("(7) Good", "7"),
+        SelectFilterOption("(8) Very Good", "8"),
+        SelectFilterOption("(9) Great", "9"),
+        SelectFilterOption("(10) Masterpiece", "10"),
+      ]),
+      SelectFilter("SeasonFilter", "Season", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("Spring", "1"),
+        SelectFilterOption("Summer", "2"),
+        SelectFilterOption("Fall", "3"),
+        SelectFilterOption("Winter", "4"),
+      ]),
+      SelectFilter("LanguageFilter", "Language", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("SUB", "1"),
+        SelectFilterOption("DUB", "2"),
+        SelectFilterOption("SUB & DUB", "3"),
+      ]),
+      SelectFilter("SortFilter", "Sort By", 0, [
+        SelectFilterOption("Default", ""),
+        SelectFilterOption("Recently Added", "recently_added"),
+        SelectFilterOption("Recently Updated", "recently_updated"),
+        SelectFilterOption("Score", "score"),
+        SelectFilterOption("Name A-Z", "name_az"),
+        SelectFilterOption("Released Date", "released_date"),
+        SelectFilterOption("Most Watched", "most_watched"),
+      ]),
+      SeparatorFilter(),
+      HeaderFilter("Start Date"),
+      SelectFilter("StartYearFilter", "Year", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("2026", "2026"),
+        SelectFilterOption("2025", "2025"),
+        SelectFilterOption("2024", "2024"),
+        SelectFilterOption("2023", "2023"),
+        SelectFilterOption("2022", "2022"),
+        SelectFilterOption("2021", "2021"),
+        SelectFilterOption("2020", "2020"),
+        SelectFilterOption("2019", "2019"),
+        SelectFilterOption("2018", "2018"),
+        SelectFilterOption("2017", "2017"),
+        SelectFilterOption("2016", "2016"),
+        SelectFilterOption("2015", "2015"),
+        SelectFilterOption("2014", "2014"),
+        SelectFilterOption("2013", "2013"),
+        SelectFilterOption("2012", "2012"),
+        SelectFilterOption("2011", "2011"),
+        SelectFilterOption("2010", "2010"),
+        SelectFilterOption("2009", "2009"),
+        SelectFilterOption("2008", "2008"),
+        SelectFilterOption("2007", "2007"),
+        SelectFilterOption("2006", "2006"),
+        SelectFilterOption("2005", "2005"),
+        SelectFilterOption("2004", "2004"),
+        SelectFilterOption("2003", "2003"),
+        SelectFilterOption("2002", "2002"),
+        SelectFilterOption("2001", "2001"),
+        SelectFilterOption("2000", "2000"),
+      ]),
+      SelectFilter("StartMonthFilter", "Month", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("01", "1"),
+        SelectFilterOption("02", "2"),
+        SelectFilterOption("03", "3"),
+        SelectFilterOption("04", "4"),
+        SelectFilterOption("05", "5"),
+        SelectFilterOption("06", "6"),
+        SelectFilterOption("07", "7"),
+        SelectFilterOption("08", "8"),
+        SelectFilterOption("09", "9"),
+        SelectFilterOption("10", "10"),
+        SelectFilterOption("11", "11"),
+        SelectFilterOption("12", "12"),
+      ]),
+      SelectFilter("StartDayFilter", "Day", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("01", "1"),
+        SelectFilterOption("02", "2"),
+        SelectFilterOption("03", "3"),
+        SelectFilterOption("04", "4"),
+        SelectFilterOption("05", "5"),
+        SelectFilterOption("06", "6"),
+        SelectFilterOption("07", "7"),
+        SelectFilterOption("08", "8"),
+        SelectFilterOption("09", "9"),
+        SelectFilterOption("10", "10"),
+        SelectFilterOption("11", "11"),
+        SelectFilterOption("12", "12"),
+        SelectFilterOption("13", "13"),
+        SelectFilterOption("14", "14"),
+        SelectFilterOption("15", "15"),
+        SelectFilterOption("16", "16"),
+        SelectFilterOption("17", "17"),
+        SelectFilterOption("18", "18"),
+        SelectFilterOption("19", "19"),
+        SelectFilterOption("20", "20"),
+        SelectFilterOption("21", "21"),
+        SelectFilterOption("22", "22"),
+        SelectFilterOption("23", "23"),
+        SelectFilterOption("24", "24"),
+        SelectFilterOption("25", "25"),
+        SelectFilterOption("26", "26"),
+        SelectFilterOption("27", "27"),
+        SelectFilterOption("28", "28"),
+        SelectFilterOption("29", "29"),
+        SelectFilterOption("30", "30"),
+        SelectFilterOption("31", "31"),
+      ]),
+      SeparatorFilter(),
+      HeaderFilter("End Date"),
+      SelectFilter("EndYearFilter", "Year", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("2026", "2026"),
+        SelectFilterOption("2025", "2025"),
+        SelectFilterOption("2024", "2024"),
+        SelectFilterOption("2023", "2023"),
+        SelectFilterOption("2022", "2022"),
+        SelectFilterOption("2021", "2021"),
+        SelectFilterOption("2020", "2020"),
+        SelectFilterOption("2019", "2019"),
+        SelectFilterOption("2018", "2018"),
+        SelectFilterOption("2017", "2017"),
+        SelectFilterOption("2016", "2016"),
+        SelectFilterOption("2015", "2015"),
+        SelectFilterOption("2014", "2014"),
+        SelectFilterOption("2013", "2013"),
+        SelectFilterOption("2012", "2012"),
+        SelectFilterOption("2011", "2011"),
+        SelectFilterOption("2010", "2010"),
+        SelectFilterOption("2009", "2009"),
+        SelectFilterOption("2008", "2008"),
+        SelectFilterOption("2007", "2007"),
+        SelectFilterOption("2006", "2006"),
+        SelectFilterOption("2005", "2005"),
+        SelectFilterOption("2004", "2004"),
+        SelectFilterOption("2003", "2003"),
+        SelectFilterOption("2002", "2002"),
+        SelectFilterOption("2001", "2001"),
+        SelectFilterOption("2000", "2000"),
+      ]),
+      SelectFilter("EndMonthFilter", "Month", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("01", "1"),
+        SelectFilterOption("02", "2"),
+        SelectFilterOption("03", "3"),
+        SelectFilterOption("04", "4"),
+        SelectFilterOption("05", "5"),
+        SelectFilterOption("06", "6"),
+        SelectFilterOption("07", "7"),
+        SelectFilterOption("08", "8"),
+        SelectFilterOption("09", "9"),
+        SelectFilterOption("10", "10"),
+        SelectFilterOption("11", "11"),
+        SelectFilterOption("12", "12"),
+      ]),
+      SelectFilter("EndDayFilter", "Day", 0, [
+        SelectFilterOption("All", ""),
+        SelectFilterOption("01", "1"),
+        SelectFilterOption("02", "2"),
+        SelectFilterOption("03", "3"),
+        SelectFilterOption("04", "4"),
+        SelectFilterOption("05", "5"),
+        SelectFilterOption("06", "6"),
+        SelectFilterOption("07", "7"),
+        SelectFilterOption("08", "8"),
+        SelectFilterOption("09", "9"),
+        SelectFilterOption("10", "10"),
+        SelectFilterOption("11", "11"),
+        SelectFilterOption("12", "12"),
+        SelectFilterOption("13", "13"),
+        SelectFilterOption("14", "14"),
+        SelectFilterOption("15", "15"),
+        SelectFilterOption("16", "16"),
+        SelectFilterOption("17", "17"),
+        SelectFilterOption("18", "18"),
+        SelectFilterOption("19", "19"),
+        SelectFilterOption("20", "20"),
+        SelectFilterOption("21", "21"),
+        SelectFilterOption("22", "22"),
+        SelectFilterOption("23", "23"),
+        SelectFilterOption("24", "24"),
+        SelectFilterOption("25", "25"),
+        SelectFilterOption("26", "26"),
+        SelectFilterOption("27", "27"),
+        SelectFilterOption("28", "28"),
+        SelectFilterOption("29", "29"),
+        SelectFilterOption("30", "30"),
+        SelectFilterOption("31", "31"),
+      ]),
+      SeparatorFilter(),
+    ];
   }
 
   @override
   List<dynamic> getSourcePreferences() {
-    // TODO: implement
+    return [];
   }
 }
 
 AniwatchtvSource main(MSource source) {
-  return AniwatchtvSource(source:source);
+  return AniwatchtvSource(source: source);
 }

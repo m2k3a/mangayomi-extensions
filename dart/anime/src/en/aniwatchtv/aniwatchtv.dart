@@ -3,7 +3,7 @@ import 'dart:convert';
 
 class Utils {
   static String getMangaNameFromElement(MElement element, [bool isEn = true]) {
-    final elm = element.selectFirst(".film-name");
+    final elm = element.selectFirst(".film-name > a");
     String? engTitle = elm?.text.trim();
     String? japTitle = elm?.attr("data-jname").trim();
     if (isEn) return engTitle ?? japTitle ?? "No Title";
@@ -175,8 +175,7 @@ class AniwatchtvSource extends MProvider {
     for (var card in cards) {
       String? imgUrl = card.selectFirst("img")?.attr("data-src");
       String? linkUrl = card.selectFirst("a")?.attr("href");
-      // ability to add option to choose between en and jp titles later on
-      String title = Utils.getMangaNameFromElement(card);
+      String title = Utils.getMangaNameFromElement(card, this.preferenceIsEn);
       int subCount =
           int.tryParse(
             card.selectFirst(".tick-item.tick-sub")?.text.trim() ?? "0",
@@ -230,13 +229,15 @@ class AniwatchtvSource extends MProvider {
     for (var episodeElm in episodeElements) {
       chapters.add(
         MChapter(
-          // TODO: add option for jp title later on
           name:
-              "Chapter ${Utils.getEpisodeDataNumberFromElement(episodeElm)} - ${Utils.getEpisodeTitleFromElement(episodeElm)}",
+              "Chapter ${Utils.getEpisodeDataNumberFromElement(episodeElm)} - ${Utils.getEpisodeTitleFromElement(episodeElm, this.preferenceIsEn)}",
           url:
               "${this.baseUrl}${Utils.getEpisodeEndpointFromElement(episodeElm)}",
           // NOTE: idk why but the description is not showing up in the app, so added it to the name for now, :)
-          description: Utils.getEpisodeTitleFromElement(episodeElm),
+          description: Utils.getEpisodeTitleFromElement(
+            episodeElm,
+            this.preferenceIsEn,
+          ),
         ),
       );
     }

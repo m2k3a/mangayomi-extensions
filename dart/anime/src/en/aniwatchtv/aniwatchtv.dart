@@ -328,7 +328,7 @@ class AniwatchtvSource extends MProvider {
     // Exception: Video sources found: {sub: {VidSrc: [1145057, 4], T-Cloud: [1318123, 6], MegaCloud: [1145052, 1]}, dub: {VidSrc: [1148044, 4], MegaCloud: [1148038, 1], T-Cloud: [1318135, 6]}}
     List<MVideo> videos = [];
     for (var type in ["sub", "dub"]) {
-      for (var serverName in preferenceEnabledVideoSources) {
+      for (var serverName in preferenceEnabledVideoServer) {
         final String dataId = serverTypes[type]![serverName]![0];
         List<MVideo> v = await _getVideoServers(type, serverName, dataId);
         if (v.isNotEmpty) videos.addAll(v);
@@ -344,7 +344,7 @@ class AniwatchtvSource extends MProvider {
   }
 
   List<MVideo> sortVideos(List<MVideo> videos) {
-    String server = preferencePreferredVideoSource;
+    String server = preferencePreferredVideoServer;
     String type = preferencePreferredAudio;
     videos.sort((Video a, Video b) {
       int qualityMatchA = 0;
@@ -525,17 +525,17 @@ class AniwatchtvSource extends MProvider {
       throw Exception(
         "Error fetching video sources: ${json.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
       );
-    Map<String, Map<String, List<String>>> sources = {};
+    Map<String, Map<String, List<String>>> servers = {};
     MDocument document = parseHtml(json["html"] ?? "");
     for (MElement elm in document.select("div[data-id]")) {
       String dataType = elm.attr("data-type"); // sub, dub
       String serverName = elm.text.trim(); // VidSrc, MegaCloud, T-Cloud
       String dataId = elm.attr("data-id"); // unique id, for video links
       String dataServerId = elm.attr("data-server-id"); // 4, 1, 6
-      sources.putIfAbsent(dataType, () => {});
-      sources[dataType]![serverName] = [dataId, dataServerId];
+      servers.putIfAbsent(dataType, () => {});
+      servers[dataType]![serverName] = [dataId, dataServerId];
     }
-    return sources;
+    return servers;
   }
 
   @override
@@ -855,13 +855,13 @@ class AniwatchtvSource extends MProvider {
   String get preferencePreferredAudio =>
       getPreferenceValue(this.source.id ?? 0, "preferred_audio_preference") ??
       "sub";
-  String get preferencePreferredVideoSource =>
+  String get preferencePreferredVideoServer =>
       getPreferenceValue(
         this.source.id ?? 0,
         "preferred_video_source_preference",
       ) ??
       "VidSrc";
-  List<String> get preferenceEnabledVideoSources =>
+  List<String> get preferenceEnabledVideoServer =>
       (getPreferenceValue(
                 this.source.id ?? 0,
                 "preferred_video_sources_enabled_preference",

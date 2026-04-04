@@ -844,7 +844,7 @@ class AniwatchtvSource extends MProvider {
             "Selects which servers are enabled for fetching videos (if you disable a server here, it will not be used at all, even if it's the preferred source. This is useful if you want to exclude certain servers entirely).",
         entries: ["VidSrc", "MegaCloud", "T-Cloud"],
         entryValues: ["VidSrc", "MegaCloud", "T-Cloud"],
-        values: ["VidSrc", "MegaCloud", "T-Cloud"],
+        values: ["VidSrc", "MegaCloud" /*"T-Cloud"*/],
       ),
     ];
   }

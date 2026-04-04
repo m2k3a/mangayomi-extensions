@@ -323,13 +323,219 @@ class AniwatchtvSource extends MProvider {
   // For anime episode video list
   @override
   Future<List<MVideo>> getVideoList(String url) async {
-    return [];
+    final serverTypes = await _getVideoServerTypes(url);
+    // throw Exception("Video sources found: ${serverTypes.toString()}");
+    // Exception: Video sources found: {sub: {VidSrc: [1145057, 4], T-Cloud: [1318123, 6], MegaCloud: [1145052, 1]}, dub: {VidSrc: [1148044, 4], MegaCloud: [1148038, 1], T-Cloud: [1318135, 6]}}
+    List<MVideo> videos = [];
+    for (var type in ["sub", "dub"]) {
+      for (var serverName in preferenceEnabledVideoSources) {
+        final String dataId = serverTypes[type]![serverName]![0];
+        List<MVideo> v = await _getVideoServers(type, serverName, dataId);
+        if (v.isNotEmpty) videos.addAll(v);
+      }
+    }
+    return sortVideos(videos);
   }
 
   // For manga chapter pages
   @override
   Future<List<String>> getPageList(String url) async {
     return [];
+  }
+
+  List<MVideo> sortVideos(List<MVideo> videos) {
+    String server = preferencePreferredVideoSource;
+    String type = preferencePreferredAudio;
+    videos.sort((Video a, Video b) {
+      int qualityMatchA = 0;
+
+      if (a.quality.toLowerCase().contains(type.toLowerCase()) &&
+          a.quality.toLowerCase().contains(server.toLowerCase())) {
+        qualityMatchA = 1;
+      }
+      int qualityMatchB = 0;
+      if (b.quality.toLowerCase().contains(type.toLowerCase()) &&
+          b.quality.toLowerCase().contains(server.toLowerCase())) {
+        qualityMatchB = 1;
+      }
+      if (qualityMatchA != qualityMatchB) {
+        return qualityMatchB - qualityMatchA;
+      }
+
+      final bigRegex = RegExp(r' - (\d+).*$');
+      final regex = RegExp(r'\d+');
+      String? matchA = regex.stringMatch(bigRegex.stringMatch(a.quality) ?? "");
+      String? matchB = regex.stringMatch(bigRegex.stringMatch(b.quality) ?? "");
+      final int qualityNumA = int.tryParse(matchA ?? '0') ?? 0;
+      final int qualityNumB = int.tryParse(matchB ?? '0') ?? 0;
+      return qualityNumB - qualityNumA;
+    });
+    return videos;
+  }
+
+  Future<List<MVideo>> _getVideoServers(
+    String type,
+    String serverName,
+    String dataId,
+  ) async {
+    final heheaders = {
+      "referer": "https://megacloud.blog/",
+      "user-agent": this.headers["user-agent"] ?? "",
+    };
+    final streamData = await _getStreamData(dataId);
+    final name = "$serverName - $type";
+
+    List<Track> subtitles = [];
+    (streamData["tracks"] ?? []).forEach((track) {
+      if (track["kind"] == "subtitles" || track["kind"] == "captions") {
+        subtitles.add(
+          MTrack(file: track["file"] ?? track["link"], label: track["label"]),
+        );
+      }
+    });
+
+    List<MVideo> videos = [];
+    List<dynamic> sources = streamData["sources"] ?? [];
+    if (sources.isNotEmpty) {
+      String masterUrl = sources[0]["file"];
+      String? type = sources[0]["type"];
+      if (type == "hls") {
+        final masterPlaylistRes = (await client.get(
+          Uri.parse(masterUrl),
+          headers: heheaders,
+        )).body;
+
+        for (var it in substringAfter(
+          masterPlaylistRes,
+          "#EXT-X-STREAM-INF:",
+        ).split("#EXT-X-STREAM-INF:")) {
+          final quality =
+              "${substringBefore(substringBefore(substringAfter(substringAfter(it, "RESOLUTION="), "x"), ","), "\n")}p";
+
+          String videoUrl = substringBefore(substringAfter(it, "\n"), "\n");
+
+          if (!videoUrl.startsWith("http")) {
+            videoUrl =
+                "${masterUrl.split("/").sublist(0, masterUrl.split("/").length - 1).join("/")}/$videoUrl";
+          }
+
+          MVideo video = MVideo();
+          video
+            ..url = videoUrl
+            ..originalUrl = videoUrl
+            ..quality = "$name - $quality"
+            ..headers = heheaders
+            ..subtitles = subtitles;
+          videos.add(video);
+        }
+      } else {
+        MVideo video = MVideo();
+        video
+          ..url = masterUrl
+          ..originalUrl = masterUrl
+          ..quality = "$name - Default"
+          ..headers = heheaders
+          ..subtitles = subtitles;
+        videos.add(video);
+      }
+    }
+    return videos;
+  }
+
+  String __getNonce(String html) {
+    String line = html;
+    line = substringAfter(line, "</script>\n    ");
+    line = substringBefore(line, "</head>");
+    RegExp allPartsRegex = RegExp(
+      r"([A-Za-z0-9]{16}).*?([A-Za-z0-9]{16}).*?([A-Za-z0-9]{16})",
+    );
+    RegExp onePartRegex = RegExp(r"([A-Za-z0-9]{16})");
+    line = allPartsRegex.stringMatch(line) ?? "";
+    List<String> keys = [];
+    while (onePartRegex.hasMatch(line)) {
+      try {
+        String? part = onePartRegex.stringMatch(line);
+        keys.add(part ?? "");
+        line = line.replaceFirst(onePartRegex, "");
+      } catch (_) {
+        break;
+      }
+    }
+    return keys.join("");
+  }
+
+  /// ### return keys usually are
+  /// `sources` -> [List] of [Map]s with keys `file` and `type` \
+  /// `tracks` -> [List] of [Map]s with keys `file`, `kind`, and sometimes `label`, `default`\
+  /// `encrypted` -> [bool] value\
+  /// `intro` -> `start` and `end` keys with [int] values in seconds\
+  /// `outro` -> `start` and `end` keys with [int] values in seconds\
+  /// `server` -> [String] value of the server name e.g. 4.
+  Future<Map<String, dynamic>> _getStreamData(String dataId) async {
+    final String endpoint = "/ajax/v2/episode/sources?id=$dataId";
+    final json = jsonDecode(
+      (await client.get(
+        Uri.parse("${this.baseUrl}$endpoint"),
+        headers: this.headers,
+      )).body,
+    );
+    if (json == null || (json as Map<String, dynamic>).isEmpty)
+      throw Exception(
+        "Error fetching stream data: ${json.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
+      );
+    String secretLink = json["link"];
+    var response = await client.get(
+      Uri.parse(secretLink),
+      headers: this.headers,
+    );
+    if (response.statusCode != 200)
+      throw Exception(
+        "Error fetching stream data: ${response.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
+      );
+    final String id = substringBefore(substringAfterLast(secretLink, '/'), '?');
+    final String nonce = __getNonce(response.body);
+    response = await client.get(
+      Uri.parse(
+        "${substringBeforeLast(secretLink, '/')}/getSources?id=$id&_k=$nonce",
+      ),
+      headers: {
+        "referer": secretLink,
+        "user-agent": this.headers["user-agent"] ?? "",
+      },
+    );
+    if (response.statusCode != 200)
+      throw Exception(
+        "Error fetching stream data: ${response.statusCode} INVALID KEYS, SOMETHING CHANGED?",
+      );
+    return jsonDecode(response.body);
+  }
+
+  Future<Map<String, Map<String, List<String>>>> _getVideoServerTypes(
+    String url,
+  ) async {
+    final String episodeId = url.split('=').last;
+    final String endpoint = "/ajax/v2/episode/servers?episodeId=$episodeId";
+    final json = jsonDecode(
+      (await client.get(
+        Uri.parse("${this.baseUrl}$endpoint"),
+        headers: this.headers..addAll({"referer": url}),
+      )).body,
+    );
+    if (json == null || (json as Map<String, dynamic>).isEmpty)
+      throw Exception(
+        "Error fetching video sources: ${json.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
+      );
+    Map<String, Map<String, List<String>>> sources = {};
+    MDocument document = parseHtml(json["html"] ?? "");
+    for (MElement elm in document.select("div[data-id]")) {
+      String dataType = elm.attr("data-type"); // sub, dub
+      String serverName = elm.text.trim(); // VidSrc, MegaCloud, T-Cloud
+      String dataId = elm.attr("data-id"); // unique id, for video links
+      String dataServerId = elm.attr("data-server-id"); // 4, 1, 6
+      sources.putIfAbsent(dataType, () => {});
+      sources[dataType]![serverName] = [dataId, dataServerId];
+    }
+    return sources;
   }
 
   @override

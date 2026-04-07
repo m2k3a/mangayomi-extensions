@@ -10,7 +10,7 @@ class AnimePahe extends MProvider {
   final Client client = Client();
 
   @override
-  String get baseUrl => getPreferenceValue(source.id, "preferred_domain_new1");
+  String get baseUrl => getPreferenceValue(source.id, "preferred_domain_new2");
 
   @override
   Map<String, String> get headers => {'cookie': '__ddg1_=;__ddg2_=;'};
@@ -376,12 +376,12 @@ class AnimePahe extends MProvider {
   List<dynamic> getSourcePreferences() {
     return [
       ListPreference(
-        key: "preferred_domain_new1",
+        key: "preferred_domain_new2",
         title: "Preferred domain",
         summary: "",
         valueIndex: 0,
-        entries: ["animepahe.com"],
-        entryValues: ["https://animepahe.com"],
+        entries: ["animepahe.pw", "animepahe.com"],
+        entryValues: ["https://animepahe.pw", "https://animepahe.com"],
       ),
       SwitchPreferenceCompat(
         key: "preffered_link_type",

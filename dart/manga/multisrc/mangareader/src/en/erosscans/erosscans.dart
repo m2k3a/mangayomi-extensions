@@ -4,7 +4,7 @@ Source get erosscansSource => _erosscansSource;
 
 Source _erosscansSource = Source(
   name: "Eros Scans",
-  baseUrl: "https://erosxsun.xyz",
+  baseUrl: "https://scythescans.com",
   lang: "en",
   typeSource: "mangareader",
   iconUrl:

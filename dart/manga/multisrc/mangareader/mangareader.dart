@@ -268,7 +268,19 @@ class MangaReader extends MProvider {
       }
     }
     if (pages.isEmpty || pages.length == 1) {
-      final images = regExp(res, "\"images\"\\s*:\\s*(\\[.*?])", "", 1, 1);
+      String images = regExp(res, "\"images\"\\s*:\\s*(\\[.*?])", "", 1, 1);
+
+      if (images.isEmpty || !images.trim().startsWith('[')) {
+        final scripts = xpath(res, '//script[starts-with(@src, "data:text/javascript;base64,dHNfcmVhZGVyLnJ1bih7")]/@src');
+        if (scripts.isNotEmpty) {
+          final base64Part = scripts.first.split('base64,').last;
+          final decoded = utf8.decode(base64.decode(base64Part));
+          final match = RegExp(r'"images"\s*:\s*(\[[^\]]*\])')
+            .firstMatch(decoded);
+
+          images = match?.group(1) ?? '';
+        }
+      }
       final pages = json.decode(images) as List;
       for (var page in pages) {
         pagesUrl.add(page);

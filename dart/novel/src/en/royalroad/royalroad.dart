@@ -42,38 +42,32 @@ class RoyalRoadSource extends MProvider {
       url += addOption(url, "title", query);
     }
     for (var filter in filters) {
-      if ((filter is TextFilter) &&
-          filter.type == "TitleFilter" &&
-          filter.state.isNotEmpty)
+      if (filter.type == "TitleFilter" && filter.state.isNotEmpty)
         url += addOption(url, "title", filter.state);
-      else if ((filter is TextFilter) &&
-          filter.type == "KeywordFilter" &&
-          filter.state.isNotEmpty)
+      else if (filter.type == "KeywordFilter" && filter.state.isNotEmpty)
         url += addOption(url, "keyword", filter.state);
-      else if ((filter is TextFilter) &&
-          filter.type == "AuthorFilter" &&
-          filter.state.isNotEmpty)
+      else if (filter.type == "AuthorFilter" && filter.state.isNotEmpty)
         url += addOption(url, "author", filter.state);
-      if ((filter is GroupFilter) &&
+      if (
           filter.type == "GenreFilter" &&
           filter.state.isNotEmpty) {
-        for (TriStateFilter s in filter.state) {
+        for (final s in filter.state) {
           if (s.state == 0) continue;
           final key = s.state == 1 ? "tagsAdd" : "tagsRemove";
           url += addOption(url, key, s.value);
         }
-      } else if ((filter is GroupFilter) && filter.type == "StatusFilter") {
-        for (CheckBoxFilter s in filter.state) {
+      } else if ( filter.type == "StatusFilter") {
+        for (final s in filter.state) {
           if (!s.state) continue;
           url += addOption(url, "status", s.value);
         }
-      } else if ((filter is SelectFilter) && filter.type == "TypeFilter") {
+      } else if (filter.type == "TypeFilter") {
         url += addOption(url, "type", filter.values[filter.state].value);
-      } else if ((filter is SortFilter) && filter.type == "OrderByFilter") {
+      } else if (filter.type == "OrderByFilter") {
         url += addOption(
           url,
           "orderBy",
-          (filter.values as List<SelectFilterOption>)[filter.state.index].value,
+          filter.values[filter.state.index].value,
         );
         url += addOption(url, "dir", filter.state.ascending ? "asc" : "");
       }

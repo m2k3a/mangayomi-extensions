@@ -42,21 +42,20 @@ class RoyalRoadSource extends MProvider {
       url += addOption(url, "title", query);
     }
     for (var filter in filters) {
-      if (filter.type == "TitleFilter" && filter.state.isNotEmpty)
-        url += addOption(url, "title", filter.state);
-      else if (filter.type == "KeywordFilter" && filter.state.isNotEmpty)
-        url += addOption(url, "keyword", filter.state);
-      else if (filter.type == "AuthorFilter" && filter.state.isNotEmpty)
-        url += addOption(url, "author", filter.state);
-      if (
-          filter.type == "GenreFilter" &&
-          filter.state.isNotEmpty) {
+      // if (filter.type == "TitleFilter" && filter.state.isNotEmpty)
+      //   url += addOption(url, "title", filter.state);
+      // else if (filter.type == "KeywordFilter" && filter.state.isNotEmpty)
+      //   url += addOption(url, "keyword", filter.state);
+      // else if (filter.type == "AuthorFilter" && filter.state.isNotEmpty)
+      //   url += addOption(url, "author", filter.state);
+      // NOTE: these above for some reason are broken, it always throws an error about trying to convert String to Bg or whatever
+      if (filter.type == "GenreFilter" && filter.state.isNotEmpty) {
         for (final s in filter.state) {
           if (s.state == 0) continue;
           final key = s.state == 1 ? "tagsAdd" : "tagsRemove";
           url += addOption(url, key, s.value);
         }
-      } else if ( filter.type == "StatusFilter") {
+      } else if (filter.type == "StatusFilter") {
         for (final s in filter.state) {
           if (!s.state) continue;
           url += addOption(url, "status", s.value);
@@ -250,9 +249,9 @@ class RoyalRoadSource extends MProvider {
   List<dynamic> getFilterList() {
     return [
       HeaderFilter("Search Filters"),
-      TextFilter("TitleFilter", "Title"),
-      TextFilter("KeywordFilter", "Keyword (title or description)"),
-      TextFilter("AuthorFilter", "Author"),
+      TextFilter("TitleFilter", "Title (DISABLED)"),
+      TextFilter("KeywordFilter", "Keyword (title or description) (DISABLED)"),
+      TextFilter("AuthorFilter", "Author (DISABLED)"),
       SeparatorFilter(),
       HeaderFilter("Genres and Tags"),
       GroupFilter("GenreFilter", "Genres", [

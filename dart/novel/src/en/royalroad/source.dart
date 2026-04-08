@@ -7,9 +7,9 @@ const _royalroadSourceCodeUrl =
 const _royalroadIconUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/novel/src/en/royalroad/icon.png";
 Source _royalroadSource = Source(
-  name: "MangaPark",
-  baseUrl: "https://mangapark.io",
-  apiUrl: "https://mangapark.io/apo/",
+  name: "RoyalRoad",
+  baseUrl: "https://royalroad.com",
+  apiUrl: "https://royalroad.com",
   lang: "en",
   typeSource: "single",
   iconUrl: _royalroadIconUrl,

@@ -361,12 +361,16 @@ class AnimePahe extends MProvider {
         return qualityMatchB - qualityMatchA;
       }
 
-      final regex = RegExp(r'(\d+)p');
-      final matchA = regex.firstMatch(a.quality);
-      final matchB = regex.firstMatch(b.quality);
-      final int qualityNumA = int.tryParse(matchA?.group(1) ?? '0') ?? 0;
-      final int qualityNumB = int.tryParse(matchB?.group(1) ?? '0') ?? 0;
-      return qualityNumB - qualityNumA;
+      try {
+        final regex = RegExp(r'(\d+)p');
+        final matchA = regex.firstMatch(a.quality);
+        final matchB = regex.firstMatch(b.quality);
+        final int qualityNumA = int.tryParse(matchA?.group(1) ?? '0') ?? 0;
+        final int qualityNumB = int.tryParse(matchB?.group(1) ?? '0') ?? 0;
+        return qualityNumB - qualityNumA;
+      } catch (_) {
+        return qualityMatchB - qualityMatchA;
+      }
     });
 
     return videos;

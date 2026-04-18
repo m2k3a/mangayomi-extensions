@@ -336,6 +336,7 @@ class AniwatchtvSource extends MProvider {
     // Exception: Video sources found: {sub: {VidSrc: [1145057, 4], T-Cloud: [1318123, 6], MegaCloud: [1145052, 1]}, dub: {VidSrc: [1148044, 4], MegaCloud: [1148038, 1], T-Cloud: [1318135, 6]}}
     List<MVideo> videos = [];
     for (var type in ["sub", "dub"]) {
+      if (!serverTypes.containsKey(type)) continue;
       for (var serverName in preferenceEnabledVideoServer) {
         final String dataId = serverTypes[type]![serverName]![0];
         List<MVideo> v = await _getVideoServers(type, serverName, dataId);

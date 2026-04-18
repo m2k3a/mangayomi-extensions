@@ -4,24 +4,28 @@ import 'dart:convert';
 class Utils {
   static String getMangaNameFromElement(MElement element, [bool isEn = true]) {
     final elm = element.selectFirst(".film-name > a");
-    String? engTitle = elm?.text.trim();
-    String? japTitle = elm?.attr("data-jname").trim();
+    String? engTitle = elm?.text?.trim();
+    String? japTitle = elm?.attr("data-jname")?.trim();
     if (isEn) return engTitle ?? japTitle ?? "No Title";
     return japTitle ?? engTitle ?? "No Title";
   }
 
   static String getStatsFromElement(MElement element) {
     List<String> stats = [];
-    List<MElement> infoElements = element.select(".film-stats > .tick > .item");
+    List<MElement> infoElements =
+        element.select(".film-stats > .tick > .item") ?? [];
     for (var infoElm in infoElements) {
-      stats.add(infoElm.text.trim());
+      String? txt = infoElm.text?.trim();
+      txt != null ? stats.add(txt) : null;
     }
     return stats.join(", ");
   }
 
   static String getDescriptionFromElement(MElement element) {
-    List<String> lines = (element.selectFirst(".anisc-info")?.text.trim() ?? "")
-        .split(RegExp(r"\s{5,}"));
+    List<String> lines =
+        (element.selectFirst(".anisc-info")?.text?.trim() ?? "").split(
+          RegExp(r"\s{5,}"),
+        );
     List<String> descriptionLines = [];
     String tempLine = "";
     for (String line in lines) {
@@ -37,9 +41,11 @@ class Utils {
 
   static List<String> getGenresFromElement(MElement element) {
     List<String> genres = [];
-    List<MElement> genreElements = element.select(".anisc-info div [title]");
+    List<MElement> genreElements =
+        element.select(".anisc-info div [title]") ?? [];
     for (var genreElm in genreElements) {
-      genres.add(genreElm.text.trim());
+      String? txt = genreElm.text?.trim();
+      txt != null ? genres.add(txt) : null;
     }
     return genres;
   }
@@ -49,7 +55,7 @@ class Utils {
       ".anisc-info .item:contains(Status) .name",
     );
     if (statusElement == null) return "Unknown";
-    return statusElement.text.trim();
+    return statusElement.text?.trim() ?? "Unknown";
   }
 
   static String getEpisodeTitleFromElement(
@@ -57,18 +63,18 @@ class Utils {
     bool isEn = true,
   ]) {
     final elm = episodeElm.selectFirst(".ep-name");
-    String? engTitle = elm?.text.trim();
-    String? japTitle = elm?.attr("data-jname").trim();
+    String? engTitle = elm?.text?.trim();
+    String? japTitle = elm?.attr("data-jname")?.trim();
     if (isEn) return engTitle ?? japTitle ?? "No Title";
     return japTitle ?? engTitle ?? "No Title";
   }
 
   static String getEpisodeDataNumberFromElement(MElement episodeElm) {
-    return episodeElm.attr("data-number");
+    return episodeElm.attr("data-number") ?? "";
   }
 
   static String getEpisodeEndpointFromElement(MElement episodeElm) {
-    return episodeElm.attr("href");
+    return episodeElm.attr("href") ?? "";
   }
 }
 
@@ -170,7 +176,8 @@ class AniwatchtvSource extends MProvider {
       throw Exception(
         "Error fetching data: ${response.statusCode} WEBSITE DOWN?",
       );
-    final cards = parseHtml(response.body).getElementsByClassName("flw-item");
+    List<MElement> cards =
+        parseHtml(response.body).getElementsByClassName("flw-item") ?? [];
     List<MManga> mangaList = [];
     for (var card in cards) {
       String? imgUrl = card.selectFirst("img")?.attr("data-src");
@@ -178,24 +185,24 @@ class AniwatchtvSource extends MProvider {
       String title = Utils.getMangaNameFromElement(card, this.preferenceIsEn);
       int subCount =
           int.tryParse(
-            card.selectFirst(".tick-item.tick-sub")?.text.trim() ?? "0",
+            card.selectFirst(".tick-item.tick-sub")?.text?.trim() ?? "0",
           ) ??
           0;
       int dubCount =
           int.tryParse(
-            card.selectFirst(".tick-item.tick-dub")?.text.trim() ?? "0",
+            card.selectFirst(".tick-item.tick-dub")?.text?.trim() ?? "0",
           ) ??
           0;
       int totalEps =
           int.tryParse(
-            card.selectFirst(".tick-item.tick-eps")?.text.trim() ?? "0",
+            card.selectFirst(".tick-item.tick-eps")?.text?.trim() ?? "0",
           ) ??
           0;
       // this type is same as TypeFilter
-      String type = card.selectFirst(".fdi-item")?.text.trim() ?? "";
+      String type = card.selectFirst(".fdi-item")?.text?.trim() ?? "";
       int duration =
           int.tryParse(
-            card.selectFirst(".fdi-item.fdi-duration")?.text.trim() ?? "0",
+            card.selectFirst(".fdi-item.fdi-duration")?.text?.trim() ?? "0",
           ) ??
           0;
 
@@ -225,7 +232,7 @@ class AniwatchtvSource extends MProvider {
       );
     MDocument document = parseHtml(json["html"] ?? "");
     List<MChapter> chapters = [];
-    List<MElement> episodeElements = document.select(".ssl-item.ep-item");
+    List<MElement> episodeElements = document.select(".ssl-item.ep-item") ?? [];
     for (var episodeElm in episodeElements) {
       chapters.add(
         MChapter(
@@ -528,11 +535,16 @@ class AniwatchtvSource extends MProvider {
       );
     Map<String, Map<String, List<String>>> servers = {};
     MDocument document = parseHtml(json["html"] ?? "");
-    for (MElement elm in document.select("div[data-id]")) {
-      String dataType = elm.attr("data-type"); // sub, dub
-      String serverName = elm.text.trim(); // VidSrc, MegaCloud, T-Cloud
-      String dataId = elm.attr("data-id"); // unique id, for video links
-      String dataServerId = elm.attr("data-server-id"); // 4, 1, 6
+    for (MElement elm in document.select("div[data-id]") ?? []) {
+      String? dataType = elm.attr("data-type"); // sub, dub
+      String? serverName = elm.text?.trim(); // VidSrc, MegaCloud, T-Cloud
+      String? dataId = elm.attr("data-id"); // unique id, for video links
+      String? dataServerId = elm.attr("data-server-id"); // 4, 1, 6
+      if (dataType == null ||
+          serverName == null ||
+          dataId == null ||
+          dataServerId == null)
+        continue;
       servers.putIfAbsent(dataType, () => {});
       servers[dataType]![serverName] = [dataId, dataServerId];
     }

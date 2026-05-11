@@ -1,13 +1,13 @@
 const mangayomiSources = [{
     "name": "AnimeWorld",
     "lang": "it",
-    "baseUrl": "https://www.animeworld.so",
+    "baseUrl": "https://www.animeworld.ac",
     "apiUrl": "",
     "iconUrl": "https://i.postimg.cc/RFRGfBvP/FVLyB1I.png",
     "typeSource": "single",
     "isManga": false,
     "itemType": 1,
-    "version": "0.0.12",
+    "version": "0.0.13",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "anime/src/it/animeworld.js"

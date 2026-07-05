@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "itemType": 1,
     "isNsfw": false,
-    "version": "0.3.8",
+    "version": "0.3.9",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "anime/src/de/aniworld.js"
@@ -539,13 +539,76 @@ streamWishExtractor = async (url) => {
     });
 }
 
-_voeExtractor = voeExtractor;
 voeExtractor = async (url) => {
-    return (await _voeExtractor(url, '')).map(v => {
-        v.quality = v.quality.replace(/Voe: (\d+p?)/i, '$1');
-        return v;
-    });
-}
+    function _decodeVoeConfig(encoded) {
+        // Step 1: ROT13
+        let s = '';
+        for (let i = 0; i < encoded.length; i++) {
+            const c = encoded.charCodeAt(i);
+            if (c >= 65 && c <= 90) s += String.fromCharCode((c - 65 + 13) % 26 + 65);
+            else if (c >= 97 && c <= 122) s += String.fromCharCode((c - 97 + 13) % 26 + 97);
+            else s += encoded[i];
+        }
+        // Step 2+3: replace delimiters with '_', then remove all '_'
+        for (const d of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) {
+            s = s.split(d).join('_');
+        }
+        s = s.split('_').join('');
+        // Step 4: base64 decode -> raw byte string (NOT UTF-8)
+        const b4 = Uint8Array.fromBase64(s);
+        let raw = '';
+        for (let i = 0; i < b4.length; i++) raw += String.fromCharCode(b4[i]);
+        // Step 5: subtract 3 from each charCode
+        let sub = '';
+        for (let i = 0; i < raw.length; i++) sub += String.fromCharCode(raw.charCodeAt(i) - 3);
+        // Step 6: reverse
+        const rev = sub.split('').reverse().join('');
+        // Step 7: base64 decode → JSON
+        return JSON.parse(Uint8Array.fromBase64(rev).decode());
+    }
+
+    try {
+        const client = new Client({ 'useDartHttpClient': true, 'followRedirects': true });
+        let res = await client.get(url);
+        let body = res.body;
+
+        // voe.sx returns a JS redirect to jeanprofessorcentral.com — follow it manually
+        const jsRedir = body.match(/window\.location\.(?:href|replace)\s*=\s*['"]([^'"]{10,})['"]/);
+        if (jsRedir) {
+            res = await client.get(jsRedir[1]);
+            body = res.body;
+        }
+
+        // Config is in <script type="application/json">["<encoded>"]</script>
+        const tagIdx = body.indexOf('type="application/json"');
+        if (tagIdx !== -1) {
+            const arrStart = body.indexOf('[', tagIdx);
+            const tagEnd = body.indexOf('</script>', tagIdx);
+            if (arrStart !== -1 && tagEnd !== -1 && arrStart < tagEnd) {
+                const arr = JSON.parse(body.substring(arrStart, tagEnd).trim());
+                if (Array.isArray(arr) && typeof arr[0] === 'string') {
+                    const cfg = _decodeVoeConfig(arr[0]);
+                    if (cfg && cfg.source) {
+                        const origin = (jsRedir ? jsRedir[1] : url).match(/https?:\/\/[^/]+/)[0];
+                        const vids = await m3u8Extractor(cfg.source, { 'Referer': origin + '/' });
+                        if (vids && vids.length > 0) return vids;
+                    }
+                    if (cfg && cfg.fallback && cfg.fallback.length > 0) {
+                        return cfg.fallback.map(fb => ({
+                            url: fb.file, originalUrl: fb.file,
+                            quality: (fb.label || '') + 'p', headers: null
+                        }));
+                    }
+                }
+            }
+        }
+
+        // Last resort: direct m3u8 scan
+        const m = body.match(/["'](https?:\/\/[^"']+\.m3u8[^"']*)['"]/);
+        if (m) return await m3u8Extractor(m[1], null);
+    } catch (e) {}
+    return [];
+};
 
 _mp4UploadExtractor = mp4UploadExtractor;
 mp4UploadExtractor = async (url) => {

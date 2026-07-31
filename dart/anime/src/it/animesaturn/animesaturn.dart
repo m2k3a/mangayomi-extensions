@@ -8,215 +8,120 @@ class AnimeSaturn extends MProvider {
 
   final Client client = Client();
 
-  @override
-  Future<MPages> getPopular(int page) async {
-    final res =
-        (await client.get(
-          Uri.parse("${source.baseUrl}/animeincorso?page=$page"),
-        )).body;
+  String absUrl(String path) =>
+      path.startsWith("http") ? path : "${source.baseUrl}$path";
 
+  MPages parseAnimeGrid(String res) {
     List<MManga> animeList = [];
 
-    final urls = xpath(
-      res,
-      '//*[@class="sebox"]/div[@class="msebox"]/div[@class="headsebox"]/div[@class="tisebox"]/h2/a/@href',
-    );
-
-    final names = xpath(
-      res,
-      '//*[@class="sebox"]/div[@class="msebox"]/div[@class="headsebox"]/div[@class="tisebox"]/h2/a/text()',
-    );
-
-    final images = xpath(
-      res,
-      '//*[@class="sebox"]/div[@class="msebox"]/div[@class="bigsebox"]/div/img[@class="attachment-post-thumbnail size-post-thumbnail wp-post-image"]/@src',
-    );
+    final urls = xpath(res, '//a[@class="ac group"]/@href');
+    final names = xpath(res, '//a[@class="ac group"]//h3[@class="ac__title"]/text()');
+    final images = xpath(res, '//a[@class="ac group"]//img/@src');
 
     for (var i = 0; i < names.length; i++) {
       MManga anime = MManga();
       anime.name = formatTitle(names[i]);
       anime.imageUrl = images[i];
-      anime.link = urls[i];
+      anime.link = absUrl(urls[i]);
       animeList.add(anime);
     }
-    return MPages(animeList, true);
+
+    final hasNextPage = xpath(res, '//a[@rel="next"]/@href').isNotEmpty;
+    return MPages(animeList, hasNextPage);
+  }
+
+  @override
+  Future<MPages> getPopular(int page) async {
+    final path = page > 1 ? "/ongoing/$page" : "/ongoing";
+    final res = (await client.get(Uri.parse(absUrl(path)))).body;
+    return parseAnimeGrid(res);
   }
 
   @override
   Future<MPages> getLatestUpdates(int page) async {
-    final res =
-        (await client.get(
-          Uri.parse("${source.baseUrl}/newest?page=$page"),
-        )).body;
-
-    List<MManga> animeList = [];
-
-    final urls = xpath(res, '//*[@class="card mb-4 shadow-sm"]/a/@href');
-
-    final names = xpath(res, '//*[@class="card mb-4 shadow-sm"]/a/@title');
-
-    final images = xpath(
-      res,
-      '//*[@class="card mb-4 shadow-sm"]/a/img[@class="new-anime"]/@src',
-    );
-
-    for (var i = 0; i < names.length; i++) {
-      MManga anime = MManga();
-      anime.name = formatTitle(names[i]);
-      anime.imageUrl = images[i];
-      anime.link = urls[i];
-      animeList.add(anime);
-    }
-    return MPages(animeList, true);
+    final path = page > 1 ? "/newest/$page" : "/newest";
+    final res = (await client.get(Uri.parse(absUrl(path)))).body;
+    return parseAnimeGrid(res);
   }
 
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     final filters = filterList.filters;
-    String url = "";
+    final basePath = page > 1 ? "/filter/$page" : "/filter";
+    String url;
 
     if (query.isNotEmpty) {
-      url = "${source.baseUrl}/animelist?search=$query";
+      url = "${absUrl(basePath)}?key=${Uri.encodeQueryComponent(query)}";
     } else {
-      url = "${source.baseUrl}/filter?";
-      int variantgenre = 0;
-      int variantstate = 0;
-      int variantyear = 0;
+      String qs = "";
       for (var filter in filters) {
         if (filter.type == "GenreFilter") {
           final genre = (filter.state as List).where((e) => e.state).toList();
-          if (genre.isNotEmpty) {
-            for (var st in genre) {
-              url += "&categories%5B${variantgenre}%5D=${st.value}";
-              variantgenre++;
-            }
+          for (var st in genre) {
+            qs += "&categories%5B%5D=${st.value}";
           }
         } else if (filter.type == "YearList") {
           final years = (filter.state as List).where((e) => e.state).toList();
-          if (years.isNotEmpty) {
-            for (var st in years) {
-              url += "&years%5B${variantyear}%5D=${st.value}";
-              variantyear++;
-            }
+          for (var st in years) {
+            qs += "&years%5B%5D=${st.value}";
           }
         } else if (filter.type == "StateList") {
           final states = (filter.state as List).where((e) => e.state).toList();
-          if (states.isNotEmpty) {
-            for (var st in states) {
-              url += "&states%5B${variantstate}%5D=${st.value}";
-              variantstate++;
-            }
+          for (var st in states) {
+            qs += "&states%5B%5D=${st.value}";
           }
-        } else if (filter.type == "LangList") {
-          final lang = filter.values[filter.state].value;
-          if (lang.isNotEmpty) {
-            url += "&language%5B0%5D=$lang";
+        } else if (filter.type == "DubList") {
+          final dub = filter.values[filter.state].value;
+          if (dub.isNotEmpty) {
+            qs += "&dub=$dub";
           }
         }
       }
-      url += "&page=$page";
+      url = "${absUrl(basePath)}?${qs.replaceFirst("&", "")}";
     }
 
     final res = (await client.get(Uri.parse(url))).body;
-
-    List<MManga> animeList = [];
-    List<String> urls = [];
-    List<String> names = [];
-    List<String> images = [];
-    if (query.isNotEmpty) {
-      urls = xpath(
-        res,
-        '//*[@class="list-group"]/li[@class="list-group-item bg-dark-as-box-shadow"]/div[@class="item-archivio"]/div[@class="info-archivio"]/h3/a[@class="badge badge-archivio badge-light"]/@href',
-      );
-
-      names = xpath(
-        res,
-        '//*[@class="list-group"]/li[@class="list-group-item bg-dark-as-box-shadow"]/div[@class="item-archivio"]/div[@class="info-archivio"]/h3/a[@class="badge badge-archivio badge-light"]/text()',
-      );
-
-      images = xpath(
-        res,
-        '//*[@class="list-group"]/li[@class="list-group-item bg-dark-as-box-shadow"]/div[@class="item-archivio"]/a/img/@src',
-      );
-    } else {
-      urls = xpath(res, '//*[@class="card mb-4 shadow-sm"]/a/@href');
-
-      names = xpath(res, '//*[@class="card mb-4 shadow-sm"]/a/text()');
-
-      images = xpath(
-        res,
-        '//*[@class="card mb-4 shadow-sm"]/a/img[@class="new-anime"]/@src',
-      );
-    }
-
-    for (var i = 0; i < names.length; i++) {
-      MManga anime = MManga();
-      anime.name = formatTitle(names[i]);
-      anime.imageUrl = images[i];
-      anime.link = urls[i];
-      animeList.add(anime);
-    }
-    return MPages(animeList, query.isEmpty);
+    return parseAnimeGrid(res);
   }
 
   @override
   Future<MManga> getDetail(String url) async {
     final statusList = [
-      {"In corso": 0, "Finito": 1},
+      {"In corso": 0, "Finito": 1, "Droppato": 2, "Non rilasciato": 3},
     ];
 
     final res = (await client.get(Uri.parse(url))).body;
     MManga anime = MManga();
-    final detailsList = xpath(
-      res,
-      '//div[@class="container shadow rounded bg-dark-as-box mb-3 p-3 w-100 text-white"]/text()',
-    );
-    if (detailsList.isNotEmpty) {
-      final details = detailsList.first;
 
-      anime.status = parseStatus(
-        details.substring(
-          details.indexOf("Stato:") + 6,
-          details.indexOf("Data di uscita:"),
-        ),
-        statusList,
-      );
-      anime.author = details.substring(7, details.indexOf("Stato:"));
+    final statusText = xpath(
+      res,
+      '//a[starts-with(@href,"/filter?states=")]//span[contains(@class,"font-semibold")]/text()',
+    );
+    if (statusText.isNotEmpty) {
+      anime.status = parseStatus(statusText.first, statusList);
     }
 
-    final description = xpath(res, '//*[@id="shown-trama"]/text()');
-    final descriptionFull = xpath(res, '//*[@id="full-trama"]/text()');
-    if (description.isNotEmpty) {
-      anime.description = description.first;
-    } else {
-      anime.description = "";
-    }
-    if (descriptionFull.isNotEmpty) {
-      if (descriptionFull.first.length > anime.description.length) {
-        anime.description = descriptionFull.first;
-      }
+    final studio = xpath(
+      res,
+      '//a[starts-with(@href,"/filter?studios=")]//span[contains(@class,"font-medium")]/text()',
+    );
+    if (studio.isNotEmpty) {
+      anime.author = studio.first;
     }
 
-    anime.genre = xpath(
-      res,
-      '//*[@class="container shadow rounded bg-dark-as-box mb-3 p-3 w-100"]/a/text()',
-    );
+    final description = xpath(res, '//*[@class="ag-story"]/div/text()');
+    anime.description = description.isNotEmpty ? description.first.trim() : "";
 
-    final epUrls = xpath(
-      res,
-      '//*[@class="btn-group episodes-button episodi-link-button"]/a/@href',
-    );
+    anime.genre = xpath(res, '//*[@class="ag-genres chip-row mt-4"]/a/text()');
 
-    final titles = xpath(
-      res,
-      '//*[@class="btn-group episodes-button episodi-link-button"]/a/text()',
-    );
+    final epUrls = xpath(res, '//a[@class="ep-tile"]/@href');
+    final epTitles = xpath(res, '//a[@class="ep-tile"]/@title');
 
     List<MChapter>? episodesList = [];
     for (var i = 0; i < epUrls.length; i++) {
       MChapter episode = MChapter();
-      episode.name = titles[i];
-      episode.url = epUrls[i];
+      episode.name = epTitles[i];
+      episode.url = absUrl(epUrls[i]);
       episodesList.add(episode);
     }
 
@@ -224,52 +129,113 @@ class AnimeSaturn extends MProvider {
     return anime;
   }
 
+  // AnimeSaturn's player is a small Alpine.js app: the "/episode/.../ep-N" info
+  // page links to "/anime/.../ep-N", which embeds a `watchPage({...})` JSON blob
+  // containing a tokenized embed link. That embed link's `/playlist` endpoint
+  // returns the real video URL, XOR-obfuscated (key = the token) and base64
+  // encoded, and only responds with a valid Referer header set.
   @override
   Future<List<MVideo>> getVideoList(String url) async {
-    final res = (await client.get(Uri.parse(url))).body;
-
-    final urlVid = xpath(res, '//a[contains(@href,"/watch")]/@href').first;
-    final resVid = (await client.get(Uri.parse(urlVid))).body;
-    String masterUrl = "";
-    if (resVid.contains("jwplayer(")) {
-      masterUrl = substringBefore(substringAfter(resVid, "file: \""), "\"");
-    } else {
-      masterUrl = parseHtml(resVid).selectFirst("source").attr("src");
-    }
+    final watchUrl = url.replaceFirst("/episode/", "/anime/");
+    final res = (await client.get(Uri.parse(watchUrl))).body;
 
     List<MVideo> videos = [];
-    if (masterUrl.endsWith("playlist.m3u8")) {
-      final masterPlaylistRes = (await client.get(Uri.parse(masterUrl))).body;
-      for (var it in substringAfter(
-        masterPlaylistRes,
-        "#EXT-X-STREAM-INF:",
-      ).split("#EXT-X-STREAM-INF:")) {
-        final quality =
-            "${substringBefore(substringBefore(substringAfter(substringAfter(it, "RESOLUTION="), "x"), ","), "\n")}p";
 
-        String videoUrl = substringBefore(substringAfter(it, "\n"), "\n");
+    final match = RegExp(r'x-data="watchPage\((.+?)\)"').firstMatch(res);
+    if (match == null) return videos;
 
-        if (!videoUrl.startsWith("http")) {
-          videoUrl =
-              "${masterUrl.split("/").sublist(0, masterUrl.split("/").length - 1).join("/")}/$videoUrl";
+    final jsonStr = match
+        .group(1)!
+        .replaceAll("&quot;", "\"")
+        .replaceAll("&amp;", "&");
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (_) {
+      return videos;
+    }
+
+    final servers = (data["servers"] as List?) ?? [];
+    for (var server in servers) {
+      final embedUrl = server["link"] as String?;
+      if (embedUrl == null || embedUrl.isEmpty) continue;
+
+      final tokenMatch = RegExp(r'token=([^&]+)').firstMatch(embedUrl);
+      if (tokenMatch == null) continue;
+      final token = tokenMatch.group(1)!;
+
+      final embedParts = embedUrl.split("?");
+      final playlistUrl = embedParts.length > 1
+          ? "${embedParts[0]}/playlist?${embedParts[1]}"
+          : "$embedUrl/playlist";
+
+      final playlistRes = (await client.get(
+        Uri.parse(playlistUrl),
+        headers: {"Referer": embedUrl},
+      )).body;
+
+      Map<String, dynamic> playlistData;
+      try {
+        playlistData = jsonDecode(playlistRes) as Map<String, dynamic>;
+      } catch (_) {
+        continue;
+      }
+
+      final encoded = playlistData["d"] as String? ?? "";
+      final decoded = xorDecode(encoded, token);
+      if (decoded.isEmpty || decoded.startsWith("youtube/")) continue;
+
+      if (decoded.contains(".m3u8")) {
+        final masterPlaylistRes = (await client.get(Uri.parse(decoded))).body;
+        for (var it in substringAfter(
+          masterPlaylistRes,
+          "#EXT-X-STREAM-INF:",
+        ).split("#EXT-X-STREAM-INF:")) {
+          if (it.trim().isEmpty) continue;
+          final quality =
+              "${substringBefore(substringBefore(substringAfter(substringAfter(it, "RESOLUTION="), "x"), ","), "\n")}p";
+
+          String videoUrl = substringBefore(substringAfter(it, "\n"), "\n");
+
+          if (!videoUrl.startsWith("http")) {
+            videoUrl =
+                "${decoded.split("/").sublist(0, decoded.split("/").length - 1).join("/")}/$videoUrl";
+          }
+
+          MVideo video = MVideo();
+          video
+            ..url = videoUrl
+            ..originalUrl = videoUrl
+            ..quality = quality;
+          videos.add(video);
         }
-
+      } else {
         MVideo video = MVideo();
         video
-          ..url = videoUrl
-          ..originalUrl = videoUrl
-          ..quality = quality;
+          ..url = decoded
+          ..originalUrl = decoded
+          ..quality = "Qualità predefinita";
         videos.add(video);
       }
-    } else {
-      MVideo video = MVideo();
-      video
-        ..url = masterUrl
-        ..originalUrl = masterUrl
-        ..quality = "Qualità predefinita";
-      videos.add(video);
     }
+
     return sortVideos(videos, source.id);
+  }
+
+  String xorDecode(String b64, String key) {
+    if (b64.isEmpty) return "";
+    final k = key.isEmpty ? "as" : key;
+    try {
+      final bytes = base64.decode(base64.normalize(b64));
+      final out = List<int>.generate(
+        bytes.length,
+        (i) => bytes[i] ^ k.codeUnitAt(i % k.length),
+      );
+      return utf8.decode(out, allowMalformed: true);
+    } catch (_) {
+      return "";
+    }
   }
 
   String formatTitle(String titlestring) {
@@ -284,53 +250,54 @@ class AnimeSaturn extends MProvider {
     return [
       HeaderFilter("Ricerca per titolo ignora i filtri e viceversa"),
       GroupFilter("GenreFilter", "Generi", [
-        CheckBoxFilter("Arti Marziali", "Arti Marziali"),
-        CheckBoxFilter("Avventura", "Avventura"),
-        CheckBoxFilter("Azione", "Azione"),
-        CheckBoxFilter("Bambini", "Bambini"),
-        CheckBoxFilter("Commedia", "Commedia"),
-        CheckBoxFilter("Demenziale", "Demenziale"),
-        CheckBoxFilter("Demoni", "Demoni"),
-        CheckBoxFilter("Drammatico", "Drammatico"),
-        CheckBoxFilter("Ecchi", "Ecchi"),
-        CheckBoxFilter("Fantasy", "Fantasy"),
-        CheckBoxFilter("Gioco", "Gioco"),
-        CheckBoxFilter("Harem", "Harem"),
-        CheckBoxFilter("Hentai", "Hentai"),
-        CheckBoxFilter("Horror", "Horror"),
-        CheckBoxFilter("Josei", "Josei"),
-        CheckBoxFilter("Magia", "Magia"),
-        CheckBoxFilter("Mecha", "Mecha"),
-        CheckBoxFilter("Militari", "Militari"),
-        CheckBoxFilter("Mistero", "Mistero"),
-        CheckBoxFilter("Musicale", "Musicale"),
-        CheckBoxFilter("Parodia", "Parodia"),
-        CheckBoxFilter("Polizia", "Polizia"),
-        CheckBoxFilter("Psicologico", "Psicologico"),
-        CheckBoxFilter("Romantico", "Romantico"),
-        CheckBoxFilter("Samurai", "Samurai"),
-        CheckBoxFilter("Sci-Fi", "Sci-Fi"),
-        CheckBoxFilter("Scolastico", "Scolastico"),
-        CheckBoxFilter("Seinen", "Seinen"),
-        CheckBoxFilter("Sentimentale", "Sentimentale"),
-        CheckBoxFilter("Shoujo Ai", "Shoujo Ai"),
-        CheckBoxFilter("Shoujo", "Shoujo"),
-        CheckBoxFilter("Shounen Ai", "Shounen Ai"),
-        CheckBoxFilter("Shounen", "Shounen"),
-        CheckBoxFilter("Slice of Life", "Slice of Life"),
-        CheckBoxFilter("Soprannaturale", "Soprannaturale"),
-        CheckBoxFilter("Spazio", "Spazio"),
-        CheckBoxFilter("Sport", "Sport"),
-        CheckBoxFilter("Storico", "Storico"),
-        CheckBoxFilter("Superpoteri", "Superpoteri"),
-        CheckBoxFilter("Thriller", "Thriller"),
-        CheckBoxFilter("Vampiri", "Vampiri"),
-        CheckBoxFilter("Veicoli", "Veicoli"),
-        CheckBoxFilter("Yaoi", "Yaoi"),
-        CheckBoxFilter("Yuri", "Yuri"),
+        CheckBoxFilter("Arti Marziali", "3"),
+        CheckBoxFilter("Avanguardia", "5"),
+        CheckBoxFilter("Avventura", "2"),
+        CheckBoxFilter("Azione", "1"),
+        CheckBoxFilter("Bambini", "47"),
+        CheckBoxFilter("Commedia", "4"),
+        CheckBoxFilter("Demoni", "6"),
+        CheckBoxFilter("Drammatico", "7"),
+        CheckBoxFilter("Ecchi", "8"),
+        CheckBoxFilter("Fantasy", "9"),
+        CheckBoxFilter("Gioco", "10"),
+        CheckBoxFilter("Harem", "11"),
+        CheckBoxFilter("Hentai", "43"),
+        CheckBoxFilter("Horror", "13"),
+        CheckBoxFilter("Isekai", "49"),
+        CheckBoxFilter("Josei", "14"),
+        CheckBoxFilter("Magia", "16"),
+        CheckBoxFilter("Mecha", "18"),
+        CheckBoxFilter("Militari", "19"),
+        CheckBoxFilter("Mistero", "21"),
+        CheckBoxFilter("Musicale", "20"),
+        CheckBoxFilter("Parodia", "22"),
+        CheckBoxFilter("Polizia", "23"),
+        CheckBoxFilter("Psicologico", "24"),
+        CheckBoxFilter("Romantico", "46"),
+        CheckBoxFilter("Samurai", "26"),
+        CheckBoxFilter("Sci-Fi", "28"),
+        CheckBoxFilter("Scolastico", "27"),
+        CheckBoxFilter("Seinen", "29"),
+        CheckBoxFilter("Sentimentale", "25"),
+        CheckBoxFilter("Shoujo", "30"),
+        CheckBoxFilter("Shoujo Ai", "31"),
+        CheckBoxFilter("Shounen", "32"),
+        CheckBoxFilter("Shounen Ai", "33"),
+        CheckBoxFilter("Slice of Life", "34"),
+        CheckBoxFilter("Soprannaturale", "37"),
+        CheckBoxFilter("Spazio", "35"),
+        CheckBoxFilter("Sport", "36"),
+        CheckBoxFilter("Storico", "12"),
+        CheckBoxFilter("Superpoteri", "38"),
+        CheckBoxFilter("Thriller", "39"),
+        CheckBoxFilter("Vampiri", "40"),
+        CheckBoxFilter("Veicoli", "48"),
+        CheckBoxFilter("Yaoi", "41"),
+        CheckBoxFilter("Yuri", "42"),
       ]),
       GroupFilter("YearList", "Anno di Uscita", [
-        for (var i = 1969; i < 2022; i++)
+        for (var i = 2026; i >= 1967; i--)
           CheckBoxFilter(i.toString(), i.toString()),
       ]),
       GroupFilter("StateList", "Stato", [
@@ -339,10 +306,10 @@ class AnimeSaturn extends MProvider {
         CheckBoxFilter("Non rilasciato", "2"),
         CheckBoxFilter("Droppato", "3"),
       ]),
-      SelectFilter("LangList", "Lingua", 0, [
-        SelectFilterOption("", ""),
-        SelectFilterOption("Subbato", "0"),
+      SelectFilter("DubList", "Doppiaggio", 0, [
+        SelectFilterOption("Tutti", ""),
         SelectFilterOption("Doppiato", "1"),
+        SelectFilterOption("Sottotitolato", "0"),
       ]),
     ];
   }

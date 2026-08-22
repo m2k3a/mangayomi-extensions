@@ -147,15 +147,18 @@ class KissKh extends MProvider {
       }
     }
     final videoUrl = jsonRes["Video"];
+    if (videoUrl == null || videoUrl.toString().isEmpty) {
+      return [];
+    }
     var video = MVideo();
     video
       ..url = videoUrl
       ..originalUrl = videoUrl
-      ..quality = "kisskh"
+      ..quality = "KissKH"
       ..subtitles = subtitles
       ..headers = {
-        "referer": "https://kisskh.me/",
-        "origin": "https://kisskh.me",
+        "referer": "${source.baseUrl}/",
+        "origin": source.baseUrl,
       };
     return [video];
   }
@@ -163,7 +166,7 @@ class KissKh extends MProvider {
   Future<MTrack> getSubtitle(String subUrl, String subLang) async {
     final response = await client.get(
       Uri.parse(subUrl),
-      headers: {"referer": "https://kisskh.me/", "origin": "https://kisskh.me"},
+      headers: {"referer": "${source.baseUrl}/", "origin": source.baseUrl},
     );
     final subtitleData = response.body;
     String decrypted = "\n";
@@ -178,43 +181,24 @@ class KissKh extends MProvider {
   }
 
   String decrypt(String data) {
-    final key = utf8.decode([
-      56,
-      48,
-      53,
-      54,
-      52,
-      56,
-      51,
-      54,
-      52,
-      54,
-      51,
-      50,
-      56,
-      55,
-      54,
-      51,
-    ]);
-    final iv = utf8.decode([
-      54,
-      56,
-      53,
-      50,
-      54,
-      49,
-      50,
-      51,
-      55,
-      48,
-      49,
-      56,
-      53,
-      50,
-      55,
-      51,
-    ]);
-    return cryptoHandler(data, iv, key, false);
+    if (data.isEmpty) return "";
+    final keys = [
+      {
+        "key": "AmSmZVcH93UQUezi",
+        "iv": "Ras\x0bWQH#q^nPEnuv"
+      },
+      {
+        "key": utf8.decode([56, 48, 53, 54, 52, 56, 51, 54, 52, 56, 51, 50, 56, 55, 54, 51]),
+        "iv": utf8.decode([54, 56, 53, 50, 54, 49, 50, 51, 55, 48, 49, 56, 53, 50, 55, 51])
+      }
+    ];
+    for (var pair in keys) {
+      try {
+        final res = cryptoHandler(data, pair["iv"]!, pair["key"]!, false);
+        if (res.isNotEmpty) return res;
+      } catch (_) {}
+    }
+    return data;
   }
 }
 

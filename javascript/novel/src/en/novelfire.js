@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://m.media-amazon.com/images/I/31957gKv8WL.jpg",
     "typeSource": "single",
     "itemType": 2,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "pkgPath": "novel/src/en/novelfire.js",
     "notes": ""
 }];
@@ -142,9 +142,15 @@ class DefaultExtension extends MProvider {
     async getHtmlContent(name, url) {
         const client = new Client();
         const res = await client.get(url, this.getHeaders(url));
+        if (res.statusCode !== 200) {
+            throw new Error(`Failed to load chapter (${res.statusCode})`);
+        }
         const doc = new Document(res.body);
         
-        const chapterContent = doc.selectFirst("div#content");
+        const chapterContent = doc.selectFirst("div#content") || doc.selectFirst("div.chapter-content");
+        if (!chapterContent || !chapterContent.text.trim()) {
+            throw new Error("Empty chapter content or blocked by protection");
+        }
         return chapterContent.outerHtml;
     }
     // Clean html up for reader

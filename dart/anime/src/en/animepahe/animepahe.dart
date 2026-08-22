@@ -1,6 +1,6 @@
 import 'package:mangayomi/bridge_lib.dart';
+
 import 'dart:convert';
-import 'dart:math';
 
 class AnimePahe extends MProvider {
   AnimePahe(this.source);
@@ -13,7 +13,7 @@ class AnimePahe extends MProvider {
   String get baseUrl => getPreferenceValue(source.id, "preferred_domain_new2");
 
   @override
-  Map<String, String> get headers => {'cookie': '__ddg1_=;__ddg2_=;'};
+  Map<String, String> get headers => {'Referer': '$baseUrl/'};
 
   @override
   Future<MPages> getPopular(int page) async {
@@ -33,7 +33,10 @@ class AnimePahe extends MProvider {
       MManga anime = MManga();
       anime.name = item["anime_title"];
       anime.imageUrl = item["snapshot"];
-      anime.link = "/anime/?anime_id=${item["id"]}&name=${item["anime_title"]}";
+      final animeId = item["id"] ?? item["anime_id"];
+      final session = item["anime_session"] ?? item["session"] ?? "";
+      anime.link =
+          "/anime/$session?anime_id=$animeId&name=${Uri.encodeComponent(item["anime_title"] ?? "")}";
       anime.artist = item["fansub"];
       animeList.add(anime);
     }
@@ -43,7 +46,7 @@ class AnimePahe extends MProvider {
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
     final res = (await client.get(
-      Uri.parse("$baseUrl/api?m=search&l=8&q=$query"),
+      Uri.parse("$baseUrl/api?m=search&l=8&q=${Uri.encodeComponent(query)}"),
       headers: headers,
     )).body;
     final jsonResult = json.decode(res);
@@ -52,7 +55,10 @@ class AnimePahe extends MProvider {
       MManga anime = MManga();
       anime.name = item["title"];
       anime.imageUrl = item["poster"];
-      anime.link = "/anime/?anime_id=${item["id"]}&name=${item["title"]}";
+      final animeId = item["id"] ?? item["anime_id"];
+      final session = item["session"] ?? "";
+      anime.link =
+          "/anime/$session?anime_id=$animeId&name=${Uri.encodeComponent(item["title"] ?? "")}";
       animeList.add(anime);
     }
     return MPages(animeList, false);
@@ -64,13 +70,39 @@ class AnimePahe extends MProvider {
       {"Currently Airing": 0, "Finished Airing": 1},
     ];
     MManga anime = MManga();
-    final id = substringBefore(substringAfterLast(url, "?anime_id="), "&name=");
-    final name = substringAfterLast(url, "&name=");
-    final session = await getSession(name, id);
-    final res = (await client.get(
+    String? id;
+    if (url.contains("anime_id=")) {
+      id = substringBefore(substringAfter(url, "anime_id="), "&");
+    }
+    String name = "";
+    if (url.contains("name=")) {
+      name = Uri.decodeComponent(substringAfter(url, "name="));
+    }
+
+    String session = "";
+    if (url.startsWith("/anime/")) {
+      session = substringBefore(substringAfter(url, "/anime/"), "?");
+    }
+
+    if (session.isEmpty) {
+      session = await getSession(name, id ?? "");
+    }
+
+    var res = (await client.get(
       Uri.parse("$baseUrl/anime/$session?anime_id=$id"),
       headers: headers,
     )).body;
+
+    if (res.contains("404 Not Found") ||
+        res.contains("Page Not Found") ||
+        res.trim().isEmpty) {
+      session = await getSession(name, id ?? "");
+      res = (await client.get(
+        Uri.parse("$baseUrl/anime/$session?anime_id=$id"),
+        headers: headers,
+      )).body;
+    }
+
     final document = parseHtml(res);
     final status =
         (document.xpathFirst('//div/p[contains(text(),"Status:")]/text()') ??
@@ -79,13 +111,22 @@ class AnimePahe extends MProvider {
             .trim();
     anime.status = parseStatus(status, statusList);
 
-    anime.name = document.selectFirst("div.title-wrapper > h1 > span").text;
+    final titleElem = document.selectFirst("div.title-wrapper > h1 > span");
+    if (titleElem != null) {
+      anime.name = titleElem.text;
+    } else if (name.isNotEmpty) {
+      anime.name = name;
+    }
+
     anime.author =
         (document.xpathFirst('//div/p[contains(text(),"Studio:")]/text()') ??
                 "")
             .replaceAll("Studio:\n", "")
             .trim();
-    anime.imageUrl = document.selectFirst("div.anime-poster a").attr("href");
+    final posterElem = document.selectFirst("div.anime-poster a");
+    if (posterElem != null) {
+      anime.imageUrl = posterElem.attr("href");
+    }
     anime.genre = xpath(
       res,
       '//*[contains(@class,"anime-genre")]/ul/li/text()',
@@ -95,7 +136,8 @@ class AnimePahe extends MProvider {
                 "")
             .replaceAll("Synonyms:\n", "")
             .trim();
-    anime.description = document.selectFirst("div.anime-summary").text;
+    final summaryElem = document.selectFirst("div.anime-summary");
+    anime.description = summaryElem?.text ?? "";
     if (synonyms.isNotEmpty) {
       anime.description += "\n\n$synonyms";
     }
@@ -143,220 +185,308 @@ class AnimePahe extends MProvider {
   }
 
   Future<String> getSession(String title, String animeId) async {
-    final noRedirect = Client(
-      source,
-      json.encode({"followRedirects": false, "useDartHttpClient": true}),
-    );
-
-    final res = await noRedirect.get(
-      Uri.parse("$baseUrl/a/$animeId"),
-      headers: headers,
-    );
-
-    final location =
-        "https://${substringAfterLast(getMapValue(json.encode(res.headers), "location"), "https://")}";
-
-    if (location == '$baseUrl/anime') {
-      final res = (await client.get(
-        Uri.parse("$baseUrl/api?m=search&q=$title"),
+    if (title.isNotEmpty) {
+      final cleanTitle = normalizeSearchQuery(title);
+      final searchRes = (await client.get(
+        Uri.parse("$baseUrl/api?m=search&q=${Uri.encodeComponent(cleanTitle)}"),
         headers: headers,
       )).body;
-      return substringBefore(
-        substringAfter(
-          substringAfter(res, "\"id\":$animeId"),
-          "\"session\":\"",
-        ),
-        "\"",
-      );
+
+      try {
+        final jsonResult = json.decode(searchRes);
+        for (var item in jsonResult["data"] ?? []) {
+          if (animeId.isNotEmpty && item["id"]?.toString() == animeId) {
+            return item["session"] ?? "";
+          }
+          if (cleanTitle.isNotEmpty &&
+              normalizeTitle(item["title"] ?? "") ==
+                  normalizeTitle(cleanTitle)) {
+            return item["session"] ?? "";
+          }
+        }
+        if ((jsonResult["data"] as List?)?.isNotEmpty ?? false) {
+          return jsonResult["data"][0]["session"] ?? "";
+        }
+      } catch (_) {}
     }
-    return substringAfterLast(location, '/');
+
+    try {
+      final noRedirect = Client(
+        source,
+        json.encode({"followRedirects": false, "useDartHttpClient": true}),
+      );
+
+      final res = await noRedirect.get(
+        Uri.parse("$baseUrl/a/$animeId"),
+        headers: headers,
+      );
+
+      final location =
+          "https://${substringAfterLast(getMapValue(json.encode(res.headers), "location"), "https://")}";
+
+      if (location.contains("/anime/")) {
+        return substringAfterLast(location, '/');
+      }
+    } catch (_) {}
+
+    return "";
+  }
+
+  String normalizeSearchQuery(String raw) {
+    return raw
+        .replaceAll(RegExp(r'[^a-zA-Z0-9\s]+'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String normalizeTitle(String raw) {
+    return raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '').trim();
   }
 
   @override
   Future<List<MVideo>> getVideoList(String url) async {
-    //by default we use rhttp package but it does not support `followRedirects`
-    //so setting `useDartHttpClient` to true allows us to use a Dart http package that supports `followRedirects`
-    final client = Client(source, json.encode({"useDartHttpClient": true}));
-    final res = (await client.get(Uri.parse("$baseUrl$url"), headers: headers));
+    final playUrl = url.startsWith("http") ? url : "$baseUrl$url";
+    final res = await client.get(Uri.parse(playUrl), headers: headers);
     final document = parseHtml(res.body);
     final downloadLinks = document.select("div#pickDownload > a");
     final buttons = document.select("div#resolutionMenu > button");
     List<MVideo> videos = [];
 
-    for (var i = 0; i < buttons.length; i++) {
-      final btn = buttons[i];
-      final audio = btn.attr(
-        "data-audio",
-      ); // Get audio type (jpn/eng). Japanese or Dubbed.
-      final kwikLink = btn.attr("data-src");
-      final quality = btn.text;
-      final paheWinLink = downloadLinks[i].attr("href");
+    final String userAgent =
+        getMapValue(json.encode(res.request.headers), "user-agent").isNotEmpty
+        ? getMapValue(json.encode(res.request.headers), "user-agent")
+        : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-      if (getPreferenceValue(source.id, "preffered_link_type")) {
-        final noRedirectClient = Client(
-          source,
-          json.encode({"followRedirects": false, "useDartHttpClient": true}),
-        );
-        final kwikHeaders = (await noRedirectClient.get(
-          Uri.parse("${paheWinLink}/i"),
-        )).headers;
-        final kwikUrl =
-            "https://${substringAfterLast(getMapValue(json.encode(kwikHeaders), "location"), "https://")}";
-        final reskwik = (await client.get(
-          Uri.parse(kwikUrl),
-          headers: {"Referer": "https://kwik.cx/"},
-        ));
-        final matches = RegExp(
-          r'\("(\S+)",\d+,"(\S+)",(\d+),(\d+)',
-        ).firstMatch(reskwik.body);
-        final token = decrypt(
-          matches!.group(1)!,
-          matches.group(2)!,
-          matches.group(3)!,
-          int.parse(matches.group(4)!),
-        );
-        final url = RegExp(r'action="([^"]+)"').firstMatch(token)!.group(1)!;
-        final tok = RegExp(r'value="([^"]+)"').firstMatch(token)!.group(1)!;
-        var code = 419;
-        var tries = 0;
-        String location = "";
+    final bool useHlsOnly =
+        getPreferenceValue(source.id, "preffered_link_type_1") ?? false;
 
-        while (code != 302 && tries < 20) {
-          String cookie = getMapValue(
-            json.encode(res.request.headers),
-            "cookie",
+    // 1. Try Direct MP4 extraction first
+    if (!useHlsOnly) {
+      for (var i = 0; i < buttons.length; i++) {
+        try {
+          final btn = buttons[i];
+          final quality = btn.text;
+          if (i >= downloadLinks.length) continue;
+          final rawPaheLink = downloadLinks[i].attr("href");
+          if (rawPaheLink.isEmpty) continue;
+
+          final paheUrl = rawPaheLink.startsWith("http")
+              ? rawPaheLink
+              : "https://$rawPaheLink";
+          final finalPaheUrl = paheUrl.endsWith("/i") ? paheUrl : "$paheUrl/i";
+
+          final noRedirectClient = Client(
+            source,
+            json.encode({"followRedirects": false, "useDartHttpClient": true}),
           );
-          cookie +=
-              "; ${getMapValue(json.encode(reskwik.headers), "set-cookie").replaceAll("path=/;", "")}";
-          final resNo =
-              await Client(
-                source,
-                json.encode({
-                  "followRedirects": false,
-                  "useDartHttpClient": true,
-                }),
-              ).post(
-                Uri.parse(url),
-                headers: {
-                  "referer": reskwik.request.url.toString(),
-                  "cookie": cookie,
-                  "user-agent": getMapValue(
-                    json.encode(res.request.headers),
-                    "user-agent",
-                  ),
-                },
-                body: {"_token": tok},
-              );
-          code = resNo.statusCode;
-          tries++;
-          location = getMapValue(json.encode(resNo.headers), "location");
-        }
-        if (tries > 19) {
-          throw ("Failed to extract the stream uri from kwik.");
-        }
-        MVideo video = MVideo();
-        video
-          ..url = location
-          ..originalUrl = location
-          ..quality = quality;
-        videos.add(video);
-      } else {
-        final ress = (await client.get(
-          Uri.parse(kwikLink),
-          headers: {"Referer": "https://animepahe.com"},
-        ));
-        final script = substringAfterLast(
-          xpath(
-            ress.body,
-            '//script[contains(text(),"eval(function")]/text()',
-          ).first,
-          "eval(function(",
-        );
-        final videoUrl = substringBefore(
-          substringAfter(
-            unpackJsAndCombine("eval(function($script"),
-            "const source=\\'",
-          ),
-          "\\';",
-        );
-        MVideo video = MVideo();
-        video
-          ..url = videoUrl
-          ..originalUrl = videoUrl
-          ..quality = quality
-          ..headers = {"referer": "https://kwik.cx"};
-        videos.add(video);
+          final kwikHeaders = (await noRedirectClient.get(
+            Uri.parse(finalPaheUrl),
+            headers: {"Referer": "$baseUrl/"},
+          )).headers;
+
+          String kwikLocation = getMapValue(
+            json.encode(kwikHeaders),
+            "location",
+          );
+          if (kwikLocation.isEmpty) {
+            kwikLocation = getMapValue(json.encode(kwikHeaders), "Location");
+          }
+          if (kwikLocation.isEmpty) continue;
+          final kwikUrl =
+              "https://${substringAfterLast(kwikLocation, "https://")}";
+
+          final reskwik = await client.get(
+            Uri.parse(kwikUrl),
+            headers: {
+              "Referer": "https://kwik.cx/",
+              "Origin": "https://kwik.cx",
+              "User-Agent": userAgent,
+            },
+          );
+
+          final matches = RegExp(r'\("(\S+)",\d+,"(\S+)",(\d+),(\d+)')
+              .firstMatch(reskwik.body);
+
+          if (matches != null) {
+            final token = decrypt(
+              matches.group(1)!,
+              matches.group(2)!,
+              int.parse(matches.group(3)!),
+              int.parse(matches.group(4)!),
+            );
+            final urlMatch = RegExp(r'action="([^"]+)"').firstMatch(token);
+            final tokMatch = RegExp(r'value="([^"]+)"').firstMatch(token);
+
+            if (urlMatch != null && tokMatch != null) {
+              final postUrl = urlMatch.group(1)!;
+              final tok = tokMatch.group(1)!;
+              var code = 419;
+              var tries = 0;
+              String location = "";
+
+              while (code != 302 && tries < 10) {
+                String cookie = getMapValue(
+                  json.encode(res.request.headers),
+                  "cookie",
+                );
+                String kwikSetCookie = getMapValue(
+                  json.encode(reskwik.headers),
+                  "set-cookie",
+                );
+                if (kwikSetCookie.isEmpty) {
+                  kwikSetCookie = getMapValue(
+                    json.encode(reskwik.headers),
+                    "Set-Cookie",
+                  );
+                }
+                if (kwikSetCookie.isNotEmpty) {
+                  cookie += "; ${kwikSetCookie.replaceAll("path=/;", "")}";
+                }
+                final resNo =
+                    await Client(
+                      source,
+                      json.encode({
+                        "followRedirects": false,
+                        "useDartHttpClient": true,
+                      }),
+                    ).post(
+                      Uri.parse(postUrl),
+                      headers: {
+                        "referer": reskwik.request.url.toString(),
+                        "origin": "https://kwik.cx",
+                        "cookie": cookie,
+                        "user-agent": userAgent,
+                      },
+                      body: {"_token": tok},
+                    );
+                code = resNo.statusCode;
+                tries++;
+                location = getMapValue(json.encode(resNo.headers), "location");
+                if (location.isEmpty) {
+                  location = getMapValue(
+                    json.encode(resNo.headers),
+                    "Location",
+                  );
+                }
+              }
+              if (location.isNotEmpty) {
+                MVideo video = MVideo();
+                video
+                  ..url = location
+                  ..originalUrl = location
+                  ..quality = quality
+                  ..headers = {
+                    "Referer": "https://kwik.cx/",
+                    "Origin": "https://kwik.cx",
+                    "User-Agent": userAgent,
+                  };
+                videos.add(video);
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
+
+    // 2. Fallback to HLS extraction if MP4 returned no videos or if useHlsOnly is true
+    if (videos.isEmpty) {
+      for (var i = 0; i < buttons.length; i++) {
+        try {
+          final btn = buttons[i];
+          final kwikLink = btn.attr("data-src");
+          final quality = btn.text;
+          if (kwikLink.isEmpty) continue;
+
+          final ress = await client.get(
+            Uri.parse(kwikLink),
+            headers: {
+              "Referer": "$baseUrl/",
+              "Origin": "https://kwik.cx",
+              "User-Agent": userAgent,
+            },
+          );
+
+          final scriptElements = xpath(
+            ress.body,
+            '//script[contains(text(),"eval(function")]/text()',
+          );
+          if (scriptElements.isEmpty) continue;
+
+          final script = substringAfterLast(
+            scriptElements.first,
+            "eval(function(",
+          );
+          final unpacked = unpackJsAndCombine("eval(function($script");
+          final videoUrl = substringBefore(
+            substringAfter(unpacked, "const source=\\'"),
+            "\\';",
+          );
+
+          if (videoUrl.isNotEmpty) {
+            MVideo video = MVideo();
+            video
+              ..url = videoUrl
+              ..originalUrl = videoUrl
+              ..quality = "$quality (HLS)"
+              ..headers = {
+                "Referer": ress.request.url.toString(),
+                "Origin": "https://kwik.cx",
+                "User-Agent": userAgent,
+              };
+            videos.add(video);
+          }
+        } catch (_) {}
+      }
+    }
+
     return sortVideos(videos);
   }
 
-  String getString(String ctn, int sep) {
-    int b = 10;
-    String cm =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";
-    final n = cm.substring(0, b);
-    double mx = 0;
-    for (var index = 0; index < ctn.length; index++) {
-      mx +=
-          (int.tryParse(ctn[ctn.length - index - 1], radix: 10) ?? 0.0)
-              .toInt() *
-          (pow(sep, index));
-    }
-    var m = '';
-    while (mx > 0) {
-      m = n[(mx % b).toInt()] + m;
-      mx = (mx - (mx % b)) / b;
-    }
-    return m.isNotEmpty ? m : '0';
-  }
-
-  String decrypt(String fS, String key, String v1, int v2) {
-    var html = "";
-    var i = 0;
-    final ld = int.parse(v1);
-    while (i < fS.length) {
-      var s = "";
-      while (fS[i] != key[v2]) {
-        s += fS[i];
-        i++;
-      }
-      for (var index = 0; index < key.length; index++) {
-        s = s.replaceAll(key[index], index.toString());
-      }
-      html += String.fromCharCode(int.parse(getString(s, v2)) - ld);
-      i++;
+  String decrypt(String fullString, String key, int v1, int v2) {
+    Map<String, int> keyIndexMap = {};
+    for (int i = 0; i < key.length; i++) {
+      keyIndexMap[key[i]] = i;
     }
 
-    return html;
+    StringBuffer sb = StringBuffer();
+    int i = 0;
+    if (v2 >= key.length) return "";
+    String toFind = key[v2];
+
+    while (i < fullString.length) {
+      int nextIndex = fullString.indexOf(toFind, i);
+      if (nextIndex == -1) break;
+
+      int val = 0;
+      for (int j = i; j < nextIndex; j++) {
+        val = val * v2 + (keyIndexMap[fullString[j]] ?? 0);
+      }
+
+      i = nextIndex + 1;
+      sb.writeCharCode(val - v1);
+    }
+
+    return sb.toString();
   }
 
   List<MVideo> sortVideos(List<MVideo> videos) {
     String quality = getPreferenceValue(source.id, "preferred_quality");
     String preferredAudio = getPreferenceValue(
       source.id,
-      "preferred_audio",
+      "preferred_audio_1",
     ); // get user's audio preference
 
     videos.sort((MVideo a, MVideo b) {
-      // Prioritize audio first.
-      // Preferred Audio: Videos with matching preferred audio are ranked highest.
+      // Prioritize audio first
       int audioMatchA = a.quality.contains(preferredAudio) ? 1 : 0;
       int audioMatchB = b.quality.contains(preferredAudio) ? 1 : 0;
       if (audioMatchA != audioMatchB) {
         return audioMatchB - audioMatchA;
       }
 
-      // quality prioritized next
-      // Preferred Video Quality: If audio matches, videos with preferred video quality are ranked higher.
-      int qualityMatchA = 0;
-      if (a.quality.contains(quality)) {
-        qualityMatchA = 1;
-      }
-      int qualityMatchB = 0;
-      if (b.quality.contains(quality)) {
-        qualityMatchB = 1;
-      }
+      // Quality prioritized next
+      int qualityMatchA = a.quality.contains(quality) ? 1 : 0;
+      int qualityMatchB = b.quality.contains(quality) ? 1 : 0;
       if (qualityMatchA != qualityMatchB) {
         return qualityMatchB - qualityMatchA;
       }
@@ -388,9 +518,9 @@ class AnimePahe extends MProvider {
         entryValues: ["https://animepahe.pw", "https://animepahe.com"],
       ),
       SwitchPreferenceCompat(
-        key: "preffered_link_type",
-        title: "Use HLS links",
-        summary: "Enable this if you are having Cloudflare issues.",
+        key: "preffered_link_type_1",
+        title: "Use HLS links only",
+        summary: "Enable this if you are having issues with direct MP4 links.",
         value: false,
       ),
       ListPreference(
@@ -401,12 +531,11 @@ class AnimePahe extends MProvider {
         entries: ["1080p", "720p", "360p"],
         entryValues: ["1080", "720", "360"],
       ),
-
       ListPreference(
-        key: "preferred_audio", // Add new preference for audio
+        key: "preferred_audio_1",
         title: "Preferred Audio",
         summary: "Select your preferred audio language (Japanese or English).",
-        valueIndex: 0, // Default to Japanese (or whichever you prefer)
+        valueIndex: 0,
         entries: ["Japanese", "English"],
         entryValues: ["jpn", "eng"],
       ),

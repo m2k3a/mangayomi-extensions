@@ -7,7 +7,7 @@ const mangayomiSources = [{
     "typeSource": "single",
     "itemType": 1,
     "isNsfw": false,
-    "version": "0.1.0",
+    "version": "0.1.1",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "anime/src/de/serienstream.js"
@@ -232,7 +232,15 @@ class DefaultExtension extends MProvider {
             if (hostFilter.includes(host) && langFilter.includes(`${lang} ${type}`)) {
                 const redirect = baseUrl + element.selectFirst("a.watchEpisode").attr("href");
                 promises.push((async (redirect, lang, type, host) => {
-                    const location = (await dartClient.get(redirect)).headers.location;
+                    const redirectRes = await dartClient.get(redirect, { "Referer": baseUrl + url });
+                    let location = redirectRes.headers?.location || redirectRes.headers?.Location;
+                    if (Array.isArray(location)) location = location[0];
+                    if (!location) {
+                        const match = redirectRes.body?.match(/window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i)
+                            || redirectRes.body?.match(/<meta\s+http-equiv=["']refresh["']\s+content=["']\d+;\s*url=([^"']+)["']/i);
+                        if (match) location = match[1];
+                    }
+                    if (!location) return [];
                     return await extractAny(location, host.toLowerCase(), lang, type, host, {'Referer': this.source.baseUrl});
                 })(redirect, lang, type, host));
             }
@@ -648,7 +656,7 @@ extractAny.methods = {
     'sendvid': sendVidExtractor,
     'speedfiles': speedfilesExtractor,
     'streamtape': streamTapeExtractor,
-    'streamwish': vidHideExtractor,
+    'streamwish': streamWishExtractor,
     'vidguard': vidGuardExtractor,
     'vidhide': vidHideExtractor,
     'vidoza': vidozaExtractor,

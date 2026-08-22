@@ -452,19 +452,25 @@ class AniwatchtvSource extends MProvider {
   }
 
   String __getNonce(String html) {
+    final match48 = RegExp(r"\b[a-zA-Z0-9]{48}\b").firstMatch(html);
+    if (match48 != null) return match48.group(0)!;
+
+    final matchParts = RegExp(
+      r"\b([a-zA-Z0-9]{16})\b.*?\b([a-zA-Z0-9]{16})\b.*?\b([a-zA-Z0-9]{16})\b",
+    ).firstMatch(html);
+    if (matchParts != null) {
+      return "${matchParts.group(1)}${matchParts.group(2)}${matchParts.group(3)}";
+    }
+
     String line = html;
-    line = substringAfter(line, "</script>\n    ");
+    line = substringAfter(line, "</script>");
     line = substringBefore(line, "</head>");
-    RegExp allPartsRegex = RegExp(
-      r"([A-Za-z0-9]{16}).*?([A-Za-z0-9]{16}).*?([A-Za-z0-9]{16})",
-    );
     RegExp onePartRegex = RegExp(r"([A-Za-z0-9]{16})");
-    line = allPartsRegex.stringMatch(line) ?? "";
     List<String> keys = [];
-    while (onePartRegex.hasMatch(line)) {
+    while (onePartRegex.hasMatch(line) && keys.length < 3) {
       try {
         String? part = onePartRegex.stringMatch(line);
-        keys.add(part ?? "");
+        if (part != null) keys.add(part);
         line = line.replaceFirst(onePartRegex, "");
       } catch (_) {
         break;
@@ -488,35 +494,111 @@ class AniwatchtvSource extends MProvider {
         headers: this.headers,
       )).body,
     );
-    if (json == null || (json as Map<String, dynamic>).isEmpty)
+    if (json == null || (json as Map<String, dynamic>).isEmpty) {
       throw Exception(
-        "Error fetching stream data: ${json.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
+        "Error fetching stream data: WEBSITE DOWN OR STRUCTURE CHANGES?",
       );
-    String secretLink = json["link"];
+    }
+    String secretLink = json["link"] ?? "";
+    if (secretLink.isEmpty) {
+      throw Exception("Error fetching stream data: link is empty");
+    }
+
+    final embedUri = Uri.parse(secretLink);
+    final origin = "${embedUri.scheme}://${embedUri.host}";
+
     var response = await client.get(
-      Uri.parse(secretLink),
-      headers: this.headers,
+      embedUri,
+      headers: {
+        "user-agent": this.headers["user-agent"] ?? "",
+        "referer": "${this.baseUrl}/",
+        "accept": "*/*",
+      },
     );
-    if (response.statusCode != 200)
+
+    if (response.statusCode != 200) {
       throw Exception(
         "Error fetching stream data: ${response.statusCode} WEBSITE DOWN OR STRUCTURE CHANGES?",
       );
-    final String id = substringBefore(substringAfterLast(secretLink, '/'), '?');
+    }
+
+    String id = "";
+    if (secretLink.contains("/e-1/")) {
+      id = substringBefore(substringAfter(secretLink, "/e-1/"), "?");
+    } else {
+      id = substringBefore(substringAfterLast(secretLink, '/'), '?');
+    }
+
     final String nonce = __getNonce(response.body);
+
+    String getSourcesUrl = "";
+    if (secretLink.contains("/embed-2/v3/e-1/")) {
+      getSourcesUrl = "$origin/embed-2/v3/e-1/getSources?id=$id&_k=$nonce";
+    } else if (secretLink.contains("/embed-2/e-1/")) {
+      getSourcesUrl = "$origin/embed-2/ajax/e-1/getSources?id=$id&_k=$nonce";
+    } else {
+      getSourcesUrl = "${substringBeforeLast(secretLink, '/')}/getSources?id=$id&_k=$nonce";
+    }
+
     response = await client.get(
-      Uri.parse(
-        "${substringBeforeLast(secretLink, '/')}/getSources?id=$id&_k=$nonce",
-      ),
+      Uri.parse(getSourcesUrl),
       headers: {
         "referer": secretLink,
         "user-agent": this.headers["user-agent"] ?? "",
+        "accept": "*/*",
+        "x-requested-with": "XMLHttpRequest",
       },
     );
-    if (response.statusCode != 200)
+
+    if (response.statusCode != 200) {
+      final altUrl = "$origin/embed-2/v3/e-1/getSources?id=$id&_k=$nonce";
+      response = await client.get(
+        Uri.parse(altUrl),
+        headers: {
+          "referer": secretLink,
+          "user-agent": this.headers["user-agent"] ?? "",
+          "accept": "*/*",
+          "x-requested-with": "XMLHttpRequest",
+        },
+      );
+    }
+
+    if (response.statusCode != 200) {
       throw Exception(
         "Error fetching stream data: ${response.statusCode} INVALID KEYS, SOMETHING CHANGED?",
       );
-    return jsonDecode(response.body);
+    }
+
+    final Map<String, dynamic> streamData = jsonDecode(response.body);
+    final bool encrypted = streamData["encrypted"] == true;
+    final List<dynamic> sources = streamData["sources"] ?? [];
+    if (encrypted && sources.isNotEmpty) {
+      final String file = sources[0]["file"] ?? "";
+      if (!file.contains(".m3u8")) {
+        try {
+          final keysRes = await client.get(
+            Uri.parse("https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json"),
+          );
+          if (keysRes.statusCode == 200) {
+            final keysJson = jsonDecode(keysRes.body);
+            final String secretKey = keysJson["mega"] ?? "";
+            if (secretKey.isNotEmpty) {
+              final decryptUrl = "https://api.megacloud.club/decrypt?encrypted_data=${Uri.encodeComponent(file)}&nonce=${Uri.encodeComponent(nonce)}&secret=${Uri.encodeComponent(secretKey)}";
+              final decRes = await client.get(Uri.parse(decryptUrl));
+              if (decRes.statusCode == 200) {
+                final match = RegExp(r'"file":"(.*?)"').firstMatch(decRes.body);
+                if (match != null) {
+                  sources[0]["file"] = match.group(1);
+                  sources[0]["type"] = "hls";
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    return streamData;
   }
 
   Future<Map<String, Map<String, List<String>>>> _getVideoServerTypes(

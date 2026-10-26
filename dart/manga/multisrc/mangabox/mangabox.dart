@@ -7,6 +7,11 @@ class MangaBox extends MProvider {
 
   final Client client = Client();
 
+  // The app reads headers from the provider; the top-level getHeader below
+  // isn't reachable from it, so images went out without a Referer.
+  @override
+  Map<String, String> get headers => getHeader(source.baseUrl);
+
   @override
   Future<MPages> getPopular(int page) async {
     final res =

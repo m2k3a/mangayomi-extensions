@@ -1,4 +1,5 @@
 import 'package:mangayomi/bridge_lib.dart';
+import 'dart:convert';
 
 class MangaBox extends MProvider {
   MangaBox({required this.source});
@@ -6,6 +7,11 @@ class MangaBox extends MProvider {
   MSource source;
 
   final Client client = Client();
+
+  // The app reads headers from the provider; the top-level getHeader below
+  // isn't reachable from it, so images went out without a Referer.
+  @override
+  Map<String, String> get headers => getHeader(source.baseUrl);
 
   @override
   Future<MPages> getPopular(int page) async {
@@ -62,25 +68,25 @@ class MangaBox extends MProvider {
     List<String> urls = [];
     urls = xpath(
       res,
-      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item" or @class="story_item_right"]/h3/a/@href',
+      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item" or @class="story_item_right"]/h3/a/@href',
     );
     List<String> names = [];
     names = xpath(
       res,
-      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item" or @class="story_item_right"]/h3/a/text()',
+      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item" or @class="story_item_right"]/h3/a/text()',
     );
     final images = xpath(
       res,
-      '//*[@class="search-story-item" or @class="story_item" or @class="content-genres-item"  or @class="list-story-item" or @class="story-item" or @class="list-truyen-item-wrap"]/a/img/@src',
+      '//*[@class="search-story-item" or @class="story_item" or @class="content-genres-item"  or @class="list-story-item" or @class="story-item" or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap"]/a/img/@src',
     );
     if (names.isEmpty) {
       urls = xpath(
         res,
-        '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item"]/h2/a/@href',
+        '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item"]/h2/a/@href',
       );
       names = xpath(
         res,
-        '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item"]/h2/a/text()',
+        '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item"]/h2/a/text()',
       );
     }
     if (names.isEmpty) {
@@ -117,10 +123,12 @@ class MangaBox extends MProvider {
         )).body;
     final document = parseHtml(res);
     manga.author =
-        document.xpathFirst(
-          '//*[@class="table-label" and contains(text(), "Author")]/parent::tr/td[2]/text()|//li[contains(text(), "Author")]/a/text()',
-        ) ??
-        "";
+        (document.xpathFirst(
+                  '//*[@class="table-label" and contains(text(), "Author")]/parent::tr/td[2]/text()|//li[contains(text(), "Author")]/a/text()|//div[@class="info-wrap"]/div[p[contains(text(), "Author")]]/text()',
+                ) ??
+                "")
+            .replaceAll("Author(s):", "")
+            .trim();
 
     final alternative =
         document.xpathFirst(
@@ -141,7 +149,8 @@ class MangaBox extends MProvider {
           .split("Summary:", ' ')
           .last
           .replaceAll("\n", ' ')
-          .replaceAll("Description :", "");
+          .replaceAll("Description :", "")
+          .trim();
       if (alternative.isNotEmpty) {
         manga.description =
             "${manga.description}\n\nAlternative Name: $alternative";
@@ -149,15 +158,19 @@ class MangaBox extends MProvider {
     }
     final status =
         document.xpathFirst(
-          '//*[@class="table-label" and contains(text(), "Status")]/parent::tr/td[2]/text() | //li[contains(text(), "Status")]/text() | //li[contains(text(), "Status")]/a/text()',
+          '//*[@class="table-label" and contains(text(), "Status")]/parent::tr/td[2]/text() | //li[contains(text(), "Status")]/text() | //li[contains(text(), "Status")]/a/text() | //div[@class="info-wrap"]/div[p[contains(text(), "Status")]]/p[2]/text()',
         ) ??
         "";
     if (status.isNotEmpty) {
       manga.status = parseStatus(status.split(":").last.trim(), statusList);
     }
-    manga.genre = document.xpath(
-      '//*[@class="table-label" and contains(text(), "Genres")]/parent::tr/td[2]/a/text() | //li[contains(text(), "Genres")]/a/text()',
-    );
+    manga.genre = document
+        .xpath(
+          '//*[@class="table-label" and contains(text(), "Genres")]/parent::tr/td[2]/a/text() | //li[contains(text(), "Genres")]/a/text() | //div[@class="genre-list"]/a/text()',
+        )
+        .map((genre) => genre.trim())
+        .toSet()
+        .toList();
     final chaptersElements = document.select(
       "div.chapter-list div.row, ul.row-content-chapter li, div#chapter_list li",
     );
@@ -184,8 +197,54 @@ class MangaBox extends MProvider {
               )[0];
       chaptersList.add(chapter);
     }
+    if (chaptersList.isEmpty) {
+      chaptersList = await chaptersFromApi(document);
+    }
     manga.chapters = chaptersList;
     return manga;
+  }
+
+  // Newer mangabox sites (Mangabat, Mangakakalot) load the chapter list from
+  // a JSON API described by #chapter-list-container instead of the HTML.
+  Future<List<MChapter>> chaptersFromApi(MDocument document) async {
+    final container = document.selectFirst("#chapter-list-container");
+    if (container == null) return [];
+    final slug = container.attr("data-comic-slug");
+    final apiUrl = container.attr("data-api-url").replaceAll("__SLUG__", slug);
+    final chapterUrl = container
+        .attr("data-chapter-url-template")
+        .replaceAll("__MANGA__", slug);
+
+    List<MChapter> chapters = [];
+    int offset = 0;
+    bool hasMore = true;
+    while (hasMore) {
+      final res =
+          (await client.get(
+            Uri.parse("$apiUrl?limit=500&offset=$offset"),
+            headers: getHeader(source.baseUrl),
+          )).body;
+      final data = json.decode(res)["data"];
+      final page = data["chapters"] as List;
+      for (var item in page) {
+        MChapter chapter = MChapter();
+        chapter.name = item["chapter_name"];
+        chapter.url = chapterUrl.replaceAll(
+          "__CHAPTER__",
+          item["chapter_slug"],
+        );
+        chapter.dateUpload =
+            parseDates(
+              [substringBefore(item["updated_at"], "T")],
+              "yyyy-MM-dd",
+              "en",
+            )[0];
+        chapters.add(chapter);
+      }
+      offset += page.length;
+      hasMore = data["pagination"]["has_more"] == true && page.isNotEmpty;
+    }
+    return chapters;
   }
 
   @override
@@ -218,16 +277,16 @@ class MangaBox extends MProvider {
     List<String> urls = [];
     urls = xpath(
       res,
-      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item"]/h3/a/@href',
+      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item"]/h3/a/@href',
     );
     List<String> names = [];
     names = xpath(
       res,
-      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="story-item"]/h3/a/text()',
+      '//*[ @class^="genres-item"  or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap" or @class="story-item"]/h3/a/text()',
     );
     final images = xpath(
       res,
-      '//*[ @class="content-genres-item"  or @class="list-story-item" or @class="story-item" or @class="list-truyen-item-wrap"]/a/img/@src',
+      '//*[ @class="content-genres-item"  or @class="list-story-item" or @class="story-item" or @class="list-truyen-item-wrap" or @class="list-comic-item-wrap"]/a/img/@src',
     );
     if (names.isEmpty) {
       names = xpath(res, '//*[@class="list-story-item"]/a/@title');

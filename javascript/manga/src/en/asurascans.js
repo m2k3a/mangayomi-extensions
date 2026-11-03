@@ -9,7 +9,7 @@ const mangayomiSources = [
 			"https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/main/javascript/icon/en.asurascans.png",
 		"typeSource": "single",
 		"itemType": 0,
-		"version": "0.2.14",
+		"version": "0.2.15",
 		"dateFormat": "",
 		"dateFormatLocale": "",
 		"pkgPath": "manga/src/en/asurascans.js"
@@ -191,7 +191,8 @@ class DefaultExtension extends MProvider {
 		);
 	}
 
-	// Supports: "/comics/foo-f6174291", "https://.../comics/foo-f6174291", "/series/foo", "foo"
+	// Supports: "/comics/foo-f6174291", "https://.../comics/foo-f6174291", "/series/foo",
+	// "/manga/foo/" (links saved before the site moved to /comics/), "foo"
 	_slugFromUrl(url) {
 		const raw = String(url || "").trim();
 		if (!raw) throw new Error("Missing manga URL");
@@ -203,7 +204,7 @@ class DefaultExtension extends MProvider {
 			.split("#")[0];
 		path = path.replace(/^\/+/, "").replace(/\/+$/, "");
 
-		const routeMatch = path.match(/(?:^|\/)(?:comics|series)\/([^/]+)/i);
+		const routeMatch = path.match(/(?:^|\/)(?:comics|series|manga)\/([^/]+)/i);
 		if (routeMatch?.[1]) {
 			return routeMatch[1].replace(/-f[0-9a-f]{6,8}$/i, "");
 		}
@@ -234,7 +235,7 @@ class DefaultExtension extends MProvider {
 
 		if (
 			parts.length >= 3 &&
-			(parts[0] === "comics" || parts[0] === "series") &&
+			["comics", "series", "manga"].includes(parts[0]) &&
 			parts[1]
 		) {
 			return {

@@ -6,68 +6,204 @@ class Atsumaru extends MProvider {
 
   MSource source;
 
-  final Client client = Client(source);
+  final Client client = Client();
 
-  @override
+  /// The site dropped `/api/explore/filteredView` and the HTML embedded
+  /// `window.mangaPage` payload. It now uses a Typesense-backed search
+  /// endpoint plus these JSON API routes (see the web client's Hono calls).
+  final String apiUrl = "https://atsu.moe/api";
+  static const String cdnUrl = "https://cdn.atsu.moe";
+  static const int perPage = 40;
+  static const sortMap = {
+    "title": "title:asc",
+    "trending": "trending:desc",
+    "createdAt": "dateAdded:desc",
+    "released": "releaseDate:desc",
+    "topRated": "mbRating:desc",
+  };
+  static const genreData =
+      "Action:39,Adult:46,Adventure:37,Boys Love:180,Comedy:6,Drama:31,"
+      "Fantasy:36,Girls Love:4,Hentai:10,Historical:45,Horror:44,"
+      "Martial Arts:29,"
+      "Mystery:32,Psychological:18,Romance:9,Sci-Fi:1,Slice of Life:7,Smut:41,"
+      "Supernatural:22,Thriller:19,Tragedy:5";
+  static const tagData =
+      "Full Color:57,Longstrip:93,Male Lead:58,Shounen:38,Seinen:8,"
+      "Female Lead:59,Heterosexual:108,School Life:42,School:107,"
+      "Based on a Web Novel:74,Shoujo:40,Josei:43,Mature:15,Magic:121,Harem:20,"
+      "Yaoi:16,Isekai:94,Based on a Novel:75,Ecchi:21,Reincarnation:126,"
+      "Love Triangle:125,High School:162,Adapted to Anime:166,Age Gap:106,"
+      "Based on a Light Novel:76,Web Comic:428,Japan:225,Nobility:127,"
+      "Revenge:227,Strong Male Lead:67,Royalty:128,Yuri:33,Demons:160,"
+      "Time Skip:172,Handsome Male Lead:68,Female Harem:163,"
+      "Beautiful Female Lead:72,Childhood Friends:97,Gore:262,"
+      "Strong Female Lead:69,LGBTQ+:326,Working:248,Unrequited Love:226,"
+      "College:257,Violence:830,Primarily Teen Cast:334,Misunderstandings:647,"
+      "Murder:250,Bullying:235,Urban Fantasy:261,Mature Romance:241,"
+      "Super Powers:236,Monsters:395,Time Travel:249,"
+      "Yandere:315,Friendship:242,"
+      "Tsundere:313,Cohabitation:228,Flashbacks:449,Game Elements:399,"
+      "Coming of Age:117,Swordplay:337,Cultivation:363";
+
+  final statusList = [
+    {
+      "Pending": 0,
+      "Ongoing": 0,
+      "Completed": 1,
+      "Hiatus": 2,
+      "Cancelled": 3,
+      "Canceled": 3,
+      "Unknown": 5,
+    },
+  ];
+
+  String get baseUrl => source.baseUrl ?? "https://atsu.moe";
+
+  Map<String, String> get headers => {
+    "Accept": "*/*",
+    "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7",
+    "content-type": "application/json",
+    "referer": "$baseUrl/",
+  };
+
+  /// Normalize bare, root-relative and fully qualified paths to the CDN.
+  String imageUrl(String? path) {
+    if (path == null || path.isEmpty) return "";
+    var value = path.replaceFirst(RegExp(r'^/static/'), '');
+    for (final prefix in ["$cdnUrl/static/", "$baseUrl/static/"]) {
+      if (value.startsWith(prefix)) value = value.substring(prefix.length);
+    }
+    return value.startsWith("http") ? value : "$cdnUrl/static/$value";
+  }
+
+  String sortBy(String method) => sortMap[method] ?? "views:desc";
+
+  List<String> stringList(dynamic value) =>
+      value is List ? value.map((e) => e.toString()).toList() : [];
+
+  String quoted(String value) => "`${value.replaceAll('`', r'\`')}`";
+
+  List<dynamic> triStates(String data) => data.split(",").map((entry) {
+    final i = entry.lastIndexOf(":");
+    return TriStateFilter(entry.substring(0, i), entry.substring(i + 1));
+  }).toList();
+
+  List<dynamic> checkBoxes(Iterable<String> values) =>
+      values.map((v) => CheckBoxFilter(v, v)).toList();
+
+  /// Values of checked box filters, or included/excluded tri-state filters.
+  List<dynamic> checked(dynamic state, [dynamic stateValue = true]) =>
+      state is List
+          ? state
+              .where((f) => f.state == stateValue)
+              .map((f) => f.value)
+              .toList()
+          : [];
+
+  void tri(Map<String, dynamic> filters, dynamic state, String key) {
+    if (state is! List) return;
+    filters[key] = checked(state, 1);
+    filters["exclude$key"] = checked(state, 2);
+  }
+
+  void addValues(List<String> parts, String field, dynamic value) {
+    final values = stringList(value);
+    if (values.isNotEmpty) {
+      parts.add("$field:=[${values.map(quoted).join(',')}]");
+    }
+  }
+
+  void addTags(
+    List<String> parts,
+    String field,
+    dynamic included,
+    dynamic excluded,
+  ) {
+    for (final value in stringList(included)) {
+      parts.add("$field:=${quoted(value)}");
+    }
+    final excludedValues = stringList(excluded);
+    if (excludedValues.isNotEmpty) {
+      parts.add("$field:![${excludedValues.map(quoted).join(',')}]");
+    }
+  }
+
+  /// Mirrors the `filter_by` expression built by the site before hitting
+  /// `/collections/manga/documents/search`.
+  String buildFilterBy(Map<String, dynamic> filters, bool showAdult) {
+    final parts = <String>[];
+
+    addTags(parts, "genreIds", filters["genres"], filters["excludeGenres"]);
+    addTags(parts, "tagIds", filters["tags"], filters["excludeTags"]);
+    addValues(parts, "type", filters["types"]);
+    addValues(parts, "status", filters["status"]);
+    final years = stringList(filters["years"]);
+    if (years.isNotEmpty) {
+      parts.add("releaseYear:=[${years.join(',')}]");
+    }
+    if (filters["officialTranslation"] == true) {
+      parts.add("officialTranslation:=true");
+    }
+
+    // The site hides adult series unless NSFW is enabled in preferences.
+    if (!showAdult) parts.add("isAdult:=false");
+    parts.add("hidden:!=true");
+
+    final method = filters["sortBy"]?.toString() ?? "popularity";
+    if (method == "popularity") parts.add("views:>0");
+    if (method == "topRated") parts.add("mbRating:>0");
+
+    return parts.join(" && ");
+  }
+
   Future<MPages> getMangaItems(
     int page,
-    final method,
+    String method,
     String searchString,
-    filters,
+    Map<String, dynamic> filters,
   ) async {
-    List<MPages> mangaList = [];
-    final body = {
-      "filter": {
-        "search": filters["search"] ?? searchString,
-        "tags": filters["tags"] ?? [],
-        "excludeTags": filters["excludeTags"] ?? [],
-        "types": filters["types"] ?? [],
-        "status": filters["status"] ?? [],
-        "years": filters["years"] ?? [],
-        "minChapters": filters["minChapters"],
-        "hideBookmarked": filters["hideBookmarked"] ?? false,
-        "officialTranslation": filters["officialTranslation"] ?? false,
-        "showAdult": preferenceNsfwContent(),
-        "sortBy": filters["sortBy"] ?? method,
-      },
-      "page": page,
+    final query = searchString.trim();
+    final isSearch = query.isNotEmpty;
+
+    final params = <String, String>{
+      "q": isSearch ? query : "*",
+      "query_by": "title,englishTitle,otherNames,authors,acronyms",
+      "query_by_weights": "4,3,2,2,1",
+      "num_typos": "4,3,2,1,0",
+      "prefix": "true,true,true,true,false",
+      "include_fields":
+          "id,title,englishTitle,authors,poster,posterSmall,posterMedium,"
+          "type,medium,isAdult,status,year,mbRating,popularity,dateAdded",
+      "filter_by": buildFilterBy(filters, preferenceNsfwContent()),
+      "page": "${page + 1}",
+      "per_page": "$perPage",
     };
-    final res = await client.post(
-      Uri.parse("${source.apiUrl}/explore/filteredView"),
-      headers: {
-        "Accept": "*/*",
-        "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5",
-        "content-type": "application/json",
-        "referer": "https://atsu.moe/",
-      },
-      body: json.encode(body),
-    );
-
-    final jsonResponse = json.decode(res.body);
-    final items = jsonResponse["items"];
-
-    for (final item in items) {
-      MManga manga = MManga();
-      manga.name = item["title"];
-      manga.imageUrl = "${source.baseUrl}/static/${item["image"]}";
-      manga.link = item["id"];
-      mangaList.add(manga);
+    if (isSearch) {
+      params["infix"] = "off,off,fallback,off,off";
+    } else {
+      params["sort_by"] = sortBy(method);
     }
-    body["page"] = page + 1;
-    final hasNextReq = await client.post(
-      Uri.parse("${source.apiUrl}/explore/filteredView"),
-      headers: {
-        "Accept": "*/*",
-        "accept-language": "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5",
-        "content-type": "application/json",
-        "referer": "https://atsu.moe/",
-      },
-      body: json.encode(body),
-    );
 
-    final hasNext = json.decode(hasNextReq.body)["items"].isEmpty;
+    final uri = Uri.parse(baseUrl)
+        .resolve("/collections/manga/documents/search")
+        .replace(queryParameters: params);
+    final res = await client.get(uri, headers: headers);
+    final data = json.decode(res.body);
 
-    return MPages(mangaList, !hasNext);
+    List<MManga> mangaList = [];
+    for (final hit in data?["hits"] ?? []) {
+      final item = hit["document"];
+      mangaList.add(
+        MManga()
+          ..name = item["englishTitle"] ?? item["title"] ?? "No Title"
+          ..imageUrl = imageUrl(item["poster"] ?? item["posterSmall"])
+          ..link = "${item["id"]}",
+      );
+    }
+
+    final found = data?["found"] ?? 0;
+    final hasNext = (page + 1) * perPage < found;
+    return MPages(mangaList, hasNext);
   }
 
   @override
@@ -82,142 +218,100 @@ class Atsumaru extends MProvider {
 
   @override
   Future<MPages> search(String query, int page, FilterList filterList) async {
-    final filters = filterList.filters;
-
-    final selectedFilters = {
+    final filters = <String, dynamic>{
       "search": query,
+      "genres": [],
+      "excludeGenres": [],
       "tags": [],
       "excludeTags": [],
       "types": [],
       "status": [],
       "years": [],
-      "minChapters": null,
-      "hideBookmarked": false,
       "officialTranslation": false,
       "sortBy": "popularity",
     };
 
-    for (var filter in filters) {
-      if (filter.type == "SeparatorFilter") continue;
-
-      if (filter.type == "SearchFilter") {
-        if (filter.state.isNotEmpty) {
-          selectedFilters["search"] = filter.state.toString();
-        }
-      } else if (filter.type == "SortFilter") {
-        selectedFilters["sortBy"] = filter.values[filter.state].value ?? "";
-      } else if (filter.type == "TypeFilter") {
-        final types = [];
-        for (var type in filter.state ?? []) {
-          if (type.state == true) {
-            types.add(type.value);
+    for (final filter in filterList.filters) {
+      switch (filter.type) {
+        case "SearchFilter":
+          if (filter.state.toString().isNotEmpty) {
+            filters["search"] = filter.state.toString();
           }
-        }
-        selectedFilters["types"] = types;
-      } else if (filter.type == "GenresFilter") {
-        final tags = [];
-        final excludeTags = [];
-        for (var genre in filter.state ?? []) {
-          if (genre.state == 1) {
-            tags.add(genre.value);
-          } else if (genre.state == 2) {
-            excludeTags.add(genre.value);
-          }
-        }
-        selectedFilters["tags"] = tags;
-        selectedFilters["excludeTags"] = excludeTags;
-      } else if (filter.type == "StatusFilter") {
-        final status = [];
-        for (var s in filter.state ?? []) {
-          if (s.state == true) {
-            status.add(s.value);
-          }
-        }
-        selectedFilters["status"] = status;
-      } else if (filter.type == "YearFilter") {
-        final years = [];
-        for (var y in filter.state ?? []) {
-          if (y.state == true) {
-            years.add(y.value);
-          }
-        }
-        selectedFilters["years"] = years;
-      } else if (filter.type == "TranslationsFilter") {
-        selectedFilters["officialTranslation"] = filter.state;
+          break;
+        case "SortFilter":
+          filters["sortBy"] = filter.values[filter.state].value;
+          break;
+        case "TypeFilter":
+          filters["types"] = checked(filter.state);
+          break;
+        case "GenresFilter":
+          tri(filters, filter.state, "genres");
+          break;
+        case "TagsFilter":
+          tri(filters, filter.state, "tags");
+          break;
+        case "StatusFilter":
+          filters["status"] = checked(filter.state);
+          break;
+        case "YearFilter":
+          filters["years"] = checked(filter.state);
+          break;
+        case "TranslationsFilter":
+          filters["officialTranslation"] = filter.state;
+          break;
       }
     }
 
-    if (query.isNotEmpty) {
-      selectedFilters["search"] = query;
-    }
+    if (query.isNotEmpty) filters["search"] = query;
 
     return getMangaItems(
       page - 1,
-      selectedFilters["sortBy"],
-      query,
-      selectedFilters,
+      filters["sortBy"].toString(),
+      filters["search"].toString(),
+      filters,
     );
   }
 
   @override
   Future<MManga> getDetail(String id) async {
-    final statusList = [
-      {
-        "Pending": 0,
-        "Ongoing": 0,
-        "Completed": 1,
-        "Hiatus": 2,
-        "Cancelled": 3,
-        "Unknown": 5,
-      },
-    ];
-
     final res = await client.get(
-      Uri.parse("${source.baseUrl}/manga/$id"),
-      headers: {
-        "Accept": "*/*",
-        "accept-language":
-            "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
-        "referer": "https://atsu.moe/",
-      },
+      Uri.parse("$apiUrl/manga/page?id=${Uri.encodeComponent(id)}"),
+      headers: headers,
     );
-    final doc = parseHtml(res.body);
+    final js = json.decode(res.body)?["mangaPage"] ?? {};
 
-    final contentJson = doc.select("head > script")[1].text;
-    final json = json.decode(
-      contentJson.replaceAll("window.mangaPage = ", "").replaceAll(";", ""),
-    )["mangaPage"];
-
-    final name = json["englishTitle"] ?? json["title"] ?? "No Title";
-    final imageUrl = json["poster"]?["image"];
-    final description =
-        json["synopsis"] +
-        (json["otherNames"] is List
-            ? "\n\nAlternative Titles:\n" +
-                  (json["otherNames"] ?? []).join("\n")
-            : "");
-    final status = json["status"] ?? "Unknown";
-    final authors = json["authors"]?.map((author) => author["name"]) ?? "None";
-    final genres =
-        json["tags"]?.map((tag) => tag["name"]) ??
-        json["genres"]?.map((genre) => genre["name"]) ??
-        [];
-    final chapters = await getChapters(id, {
-      for (var s in json["scanlators"]) s["id"]: s["name"],
-    });
+    final name = js["englishTitle"] ?? js["title"] ?? "No Title";
+    final posterPath = js["poster"]?["image"];
+    final otherNames = js["otherNames"];
+    final alternativeTitles =
+        otherNames is List && otherNames.isNotEmpty
+            ? "\n\nAlternative Titles:\n" + otherNames.join("\n")
+            : "";
+    final description = "${js["synopsis"] ?? ""}" + alternativeTitles;
+    final status = js["status"] ?? "Unknown";
+    final authorsValue = js["authors"];
+    final authors = authorsValue is List
+        ? authorsValue.map((a) => a["name"]).join(", ")
+        : "";
+    final genresValue = js["genres"];
+    final genres = genresValue is List
+        ? genresValue.map((g) => g["name"]).toList()
+        : <dynamic>[];
+    final scanlators = <String, String>{
+      for (final s in js["scanlators"] ?? []) "${s["id"]}": "${s["name"]}",
+    };
+    final chapters = await getChapters(id, scanlators);
 
     MManga manga = MManga();
-
     manga.name = name;
     manga.link = id;
-    manga.imageUrl = "${source.baseUrl}/static/$imageUrl";
-    manga.genre = "$genres".replaceAll(RegExp(r'[()]'), '').split(", ");
-    manga.author = "$authors".replaceAll(RegExp(r'[()]'), '');
-    manga.artist = manga.author;
+    manga.imageUrl = imageUrl(posterPath);
+    manga.genre = genres.map((g) => "$g").toList();
+    manga.author = authors;
+    manga.artist = authors;
     manga.chapters = chapters;
     manga.description = description;
     manga.status = parseStatus(status, statusList);
-
     return manga;
   }
 
@@ -226,26 +320,20 @@ class Atsumaru extends MProvider {
     Map<String, String> scanlators,
   ) async {
     List<MChapter> chapters = [];
-
     final res = await client.get(
-      Uri.parse("${source.apiUrl}/manga/allChapters?mangaId=$id"),
-      headers: {
-        "Accept": "*/*",
-        "accept-language":
-            "en-US,en;q=0.9,de;q=0.8,ja;q=0.7,es;q=0.6,nl;q=0.5,ar;q=0.4,ru;q=0.3,fr;q=0.2",
-        "referer": "https://atsu.moe/",
-      },
+      Uri.parse("$apiUrl/manga/allChapters?mangaId=${Uri.encodeComponent(id)}"),
+      headers: headers,
     );
-
     final chaps = json.decode(res.body)?["chapters"] ?? [];
     for (final chap in chaps) {
-      final chapter = MChapter()
-        ..name = chap["title"]
-        ..url = "$id&chapterId=${chap["id"]}"
-        ..dateUpload = "${chap["createdAt"]}"
-        ..description = "${chap['pageCount']} Pages"
-        ..scanlator = scanlators[chap["scanlationMangaId"]] ?? "Unknown";
-      chapters.add(chapter);
+      chapters.add(
+        MChapter()
+          ..name = chap["title"] ?? "Chapter ${chap["number"] ?? ""}"
+          ..url = "$id&chapterId=${chap["id"]}"
+          ..dateUpload = "${chap["createdAt"]}"
+          ..description = "${chap["pageCount"] ?? 0} Pages"
+          ..scanlator = scanlators["${chap["scanlationMangaId"]}"] ?? "Unknown",
+      );
     }
     return chapters;
   }
@@ -254,14 +342,12 @@ class Atsumaru extends MProvider {
   Future<List<Map<String, dynamic>>> getPageList(String url) async {
     List<Map<String, dynamic>> images = [];
     final res = await client.get(
-      Uri.parse("${source.apiUrl}/read/chapter?mangaId=$url"),
+      Uri.parse("$apiUrl/read/chapter?mangaId=$url"),
+      headers: headers,
     );
-    final json = json.decode(res.body);
-
-    final imageObjects = json["readChapter"]["pages"];
-
-    for (final imageObject in imageObjects) {
-      images.add({"url": "${source.baseUrl}${imageObject["image"]}"});
+    final pages = json.decode(res.body)?["readChapter"]?["pages"] ?? [];
+    for (final page in pages) {
+      images.add({"url": imageUrl(page["image"])});
     }
     return images;
   }
@@ -269,130 +355,38 @@ class Atsumaru extends MProvider {
   @override
   List<dynamic> getFilterList() {
     return [
-      TextFilter("SearchFilter", "Search..."),
+      TextFilter("SearchFilter", "Search...", null),
       SelectFilter("SortFilter", "Order By", 0, [
         SelectFilterOption("Popularity", "popularity"),
-        SelectFilterOption("Alphabetically", "title"),
+        SelectFilterOption("Title", "title"),
         SelectFilterOption("Trending", "trending"),
         SelectFilterOption("Date Added", "createdAt"),
         SelectFilterOption("Release Date", "released"),
+        SelectFilterOption("Top Rated", "topRated"),
       ]),
       SeparatorFilter(),
-      GroupFilter("TypeFilter", "Manga Type", [
-        CheckBoxFilter("Manga", "Manga"),
-        CheckBoxFilter("Manhua", "Manhua"),
-        CheckBoxFilter("Manhwa", "Manhwa"),
-        CheckBoxFilter("OEL", "OEL"),
-      ]),
-      GroupFilter("GenresFilter", "General Filters", [
-        TriStateFilter("Action", "n_"),
-        TriStateFilter("Adult", "Ed"),
-        TriStateFilter("Adventure", "0i"),
-        TriStateFilter("Comedy", "sz"),
-        TriStateFilter("Doujinshi", "1M"),
-        TriStateFilter("Drama", "Cq"),
-        TriStateFilter("Ecchi", "ZK"),
-        TriStateFilter("Fantasy", "Lu"),
-        TriStateFilter("Gender Bender", "Ug"),
-        TriStateFilter("Harem", "GV"),
-        TriStateFilter("Hentai", "y3"),
-        TriStateFilter("Historical", "Sa"),
-        TriStateFilter("Horror", "Xk"),
-        TriStateFilter("Isekai", "p7"),
-        TriStateFilter("Josei", "3X"),
-        TriStateFilter("Lolicon", "KY"),
-        TriStateFilter("Martial Arts", "d0"),
-        TriStateFilter("Mature", "tK"),
-        TriStateFilter("Mecha", "m9"),
-        TriStateFilter("Mystery", "Q8"),
-        TriStateFilter("Other", "Tw"),
-        TriStateFilter("Psychological", "O-"),
-        TriStateFilter("Romance", "9Q"),
-        TriStateFilter("School Life", "JH"),
-        TriStateFilter("Sci-Fi", "hr"),
-        TriStateFilter("Sci-fi", "w_"),
-        TriStateFilter("Seinen", "ce"),
-        TriStateFilter("Shotacon", "bl"),
-        TriStateFilter("Shoujo", "lk"),
-        TriStateFilter("Shoujo Ai", "kK"),
-        TriStateFilter("Shounen", "vl"),
-        TriStateFilter("Shounen Ai", "IA"),
-        TriStateFilter("Slice of Life", "I1"),
-        TriStateFilter("Smut", "ta"),
-        TriStateFilter("Sports", "Hf"),
-        TriStateFilter("Supernatural", "Ad"),
-        TriStateFilter("Thriller", "Lb"),
-        TriStateFilter("Tragedy", "Mv"),
-        TriStateFilter("Yaoi", "CJ"),
-        TriStateFilter("Yuri", "bz"),
-      ]),
+      GroupFilter(
+        "TypeFilter",
+        "Manga Type",
+        checkBoxes(["Manga", "Manhwa", "Manhua", "OEL", "Other"]),
+      ),
+      GroupFilter("GenresFilter", "Genres", triStates(genreData)),
+      GroupFilter("TagsFilter", "Popular Tags", triStates(tagData)),
       SeparatorFilter(),
-      GroupFilter("StatusFilter", "Release Status", [
-        CheckBoxFilter("Ongoing", "Ongoing"),
-        CheckBoxFilter("Completed", "Completed"),
-        CheckBoxFilter("Hiatus", "Hiatus"),
-        CheckBoxFilter("Canceled", "Canceled"),
-      ]),
-      GroupFilter("YearFilter", "Release Year", [
-        CheckBoxFilter("2026", "2026"),
-        CheckBoxFilter("2025", "2025"),
-        CheckBoxFilter("2024", "2024"),
-        CheckBoxFilter("2023", "2023"),
-        CheckBoxFilter("2022", "2022"),
-        CheckBoxFilter("2021", "2021"),
-        CheckBoxFilter("2020", "2020"),
-        CheckBoxFilter("2019", "2019"),
-        CheckBoxFilter("2018", "2018"),
-        CheckBoxFilter("2017", "2017"),
-        CheckBoxFilter("2016", "2016"),
-        CheckBoxFilter("2015", "2015"),
-        CheckBoxFilter("2014", "2014"),
-        CheckBoxFilter("2013", "2013"),
-        CheckBoxFilter("2012", "2012"),
-        CheckBoxFilter("2011", "2011"),
-        CheckBoxFilter("2010", "2010"),
-        CheckBoxFilter("2009", "2009"),
-        CheckBoxFilter("2008", "2008"),
-        CheckBoxFilter("2007", "2007"),
-        CheckBoxFilter("2006", "2006"),
-        CheckBoxFilter("2005", "2005"),
-        CheckBoxFilter("2004", "2004"),
-        CheckBoxFilter("2003", "2003"),
-        CheckBoxFilter("2002", "2002"),
-        CheckBoxFilter("2001", "2001"),
-        CheckBoxFilter("2000", "2000"),
-        CheckBoxFilter("1999", "1999"),
-        CheckBoxFilter("1998", "1998"),
-        CheckBoxFilter("1997", "1997"),
-        CheckBoxFilter("1996", "1996"),
-        CheckBoxFilter("1995", "1995"),
-        CheckBoxFilter("1994", "1994"),
-        CheckBoxFilter("1993", "1993"),
-        CheckBoxFilter("1992", "1992"),
-        CheckBoxFilter("1991", "1991"),
-        CheckBoxFilter("1990", "1990"),
-        CheckBoxFilter("1989", "1989"),
-        CheckBoxFilter("1988", "1988"),
-        CheckBoxFilter("1987", "1987"),
-        CheckBoxFilter("1986", "1986"),
-        CheckBoxFilter("1985", "1985"),
-        CheckBoxFilter("1984", "1984"),
-        CheckBoxFilter("1983", "1983"),
-        CheckBoxFilter("1982", "1982"),
-        CheckBoxFilter("1981", "1981"),
-        CheckBoxFilter("1980", "1980"),
-        CheckBoxFilter("1979", "1979"),
-        CheckBoxFilter("1978", "1978"),
-        CheckBoxFilter("1977", "1977"),
-        CheckBoxFilter("1976", "1976"),
-        CheckBoxFilter("1975", "1975"),
-        CheckBoxFilter("1974", "1974"),
-        CheckBoxFilter("1973", "1973"),
-        CheckBoxFilter("1972", "1972"),
-        CheckBoxFilter("1971", "1971"),
-        CheckBoxFilter("1970", "1970"),
-      ]),
-      CheckBoxFilter("Only show official tanslations", "TranslationsFilter"),
+      GroupFilter(
+        "StatusFilter",
+        "Release Status",
+        checkBoxes(["Ongoing", "Completed", "Hiatus", "Canceled"]),
+      ),
+      GroupFilter(
+        "YearFilter",
+        "Release Year",
+        List.generate(57, (i) {
+          final year = "${2026 - i}";
+          return CheckBoxFilter(year, year);
+        }),
+      ),
+      CheckBoxFilter("Only official translations", "TranslationsFilter"),
     ];
   }
 
@@ -411,7 +405,7 @@ class Atsumaru extends MProvider {
   }
 
   bool preferenceNsfwContent() {
-    return getPreferenceValue(source.id, "NsfwFilter") == "1";
+    return getPreferenceValue(source.id ?? 0, "NsfwFilter") == "1";
   }
 }
 

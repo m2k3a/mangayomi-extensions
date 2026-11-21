@@ -1,7 +1,7 @@
 import '../../../../../model/source.dart';
 
 Source get atsumaruSource => _atsumaruSource;
-const _atsumaruVersion = "1.0.4";
+const _atsumaruVersion = "1.0.5";
 const _atsumaruSourceCodeUrl =
     "https://raw.githubusercontent.com/m2k3a/mangayomi-extensions/$branchName/dart/manga/src/en/Atsumaru/atsumaru.dart";
 const _atsumaruIconUrl =

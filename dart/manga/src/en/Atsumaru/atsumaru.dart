@@ -8,6 +8,9 @@ class Atsumaru extends MProvider {
 
   final Client client = Client();
 
+  @override
+  bool get supportsLatest => true;
+
   /// The site dropped `/api/explore/filteredView` and the HTML embedded
   /// `window.mangaPage` payload. It now uses a Typesense-backed search
   /// endpoint plus these JSON API routes (see the web client's Hono calls).
@@ -208,12 +211,12 @@ class Atsumaru extends MProvider {
 
   @override
   Future<MPages> getPopular(int page) async {
-    return getMangaItems(page, "popularity", "", {});
+    return getMangaItems(page - 1, "popularity", "", {});
   }
 
   @override
   Future<MPages> getLatestUpdates(int page) async {
-    return getMangaItems(page, "released", "", {});
+    return getMangaItems(page - 1, "released", "", {});
   }
 
   @override
@@ -355,7 +358,7 @@ class Atsumaru extends MProvider {
   @override
   List<dynamic> getFilterList() {
     return [
-      TextFilter("SearchFilter", "Search...", null),
+      TextFilter("SearchFilter", "Search..."),
       SelectFilter("SortFilter", "Order By", 0, [
         SelectFilterOption("Popularity", "popularity"),
         SelectFilterOption("Title", "title"),
